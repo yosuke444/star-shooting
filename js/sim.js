@@ -57,6 +57,8 @@ class Game {
     };
   }
   id() { return this.nextId++; }
+  // 雑魚敵の強さ: トレーニング序盤はかなり弱く、時間とともに強くなる
+  enemyPow() { const k = this.phase === 'train' ? clamp(this.elapsed / this.cfg.trainTime, 0, 1) : 1; return { hp: .55 + .55 * k, dmg: .4 + .7 * k }; }
   n() { return this.players.length; }
   machineTarget() { return Math.round(3 + this.n() * .45); }
   enemyTarget() { return Math.min(200, Math.round(16 + this.n() * 3)); }
@@ -93,7 +95,7 @@ class Game {
     cnt = cnt || rndi(4, 7);
     for (let i = 0; i < cnt; i++) {
       const tp = pick(types), a = Math.random() * TAU, d = rnd(5, 40);
-      const e = { id: this.id(), tp, x: pos.x + Math.cos(a) * d, y: pos.y + Math.sin(a) * d, vx: 0, vy: 0, hp: ENEMIES[tp].hp, mhp: ENEMIES[tp].hp, t: Math.random() * 3, cd: 0, flash: 0, tgt: null, thk: 0, dir: Math.random() * TAU, face: 1 };
+      const e = { id: this.id(), tp, x: pos.x + Math.cos(a) * d, y: pos.y + Math.sin(a) * d, vx: 0, vy: 0, hp: ENEMIES[tp].hp * this.enemyPow().hp, mhp: ENEMIES[tp].hp * this.enemyPow().hp, pw: this.enemyPow().dmg, t: Math.random() * 3, cd: 0, flash: 0, tgt: null, thk: 0, dir: Math.random() * TAU, face: 1 };
       this.map.unstuck(e, 6); this.enemies.push(e);
     }
   }
@@ -526,14 +528,14 @@ class Game {
         case 'shoot': {
           const want = tg ? (dist > 120 ? 1 : dist < 80 ? -1 : 0) : .5; const a = tg ? ta : e.dir;
           e.vx = lerp(e.vx, Math.cos(a) * spd * want + Math.cos(a + 1.57) * spd * .5 * Math.sin(e.t), .05); e.vy = lerp(e.vy, Math.sin(a) * spd * want + Math.sin(a + 1.57) * spd * .5 * Math.sin(e.t), .05);
-          if (tg && dist < 170 && e.cd <= 0) { e.cd = SHOTS.enemy.rate + Math.random(); this.enemyShot(e.x, e.y, ta, 110, 3.5, -1); }
+          if (tg && dist < 170 && e.cd <= 0) { e.cd = SHOTS.enemy.rate + Math.random(); this.enemyShot(e.x, e.y, ta, 110, 3.5 * (e.pw || 1), -1); }
         } break;
         case 'flee': { const a = tg ? ta + Math.PI + Math.sin(e.t * 4) * .6 : e.dir; if ((e.t % .5) < dt) { e.vx = Math.cos(a) * spd; e.vy = Math.sin(a) * spd; } e.vx *= .97; e.vy *= .97; } break;
       }
       if (Math.abs(e.vx) > 1) e.face = e.vx > 0 ? 1 : -1;
       if (map.move(e, e.vx * dt, e.vy * dt, 5)) e.dir = Math.random() * TAU;
       // 接触ダメージ
-      if (tg && e.cd <= 0 && dist < T.r + 7 && T.beh !== 'flee') { this.damagePlayer(tg, T.touch, -1); e.cd = .9; e.vx = -Math.cos(ta) * 80; e.vy = -Math.sin(ta) * 80; }
+      if (tg && e.cd <= 0 && dist < T.r + 7 && T.beh !== 'flee') { this.damagePlayer(tg, T.touch * (e.pw || 1), -1); e.cd = .9; e.vx = -Math.cos(ta) * 80; e.vy = -Math.sin(ta) * 80; }
     }
     if (this.enemies.some(e => e.hp <= 0)) this.enemies = this.enemies.filter(e => e.hp > 0);
   }

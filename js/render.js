@@ -147,8 +147,10 @@ const Render = {
   },
   drawChest(ch, time) {
     const w = this.w; let img;
-    if (ch.type === 'O') img = GFX.ore[Math.floor(time * 10) % 8];
-    else img = { B: GFX.chestB, A: GFX.chestA, G: GFX.chestG, L: GFX.chestL, I: GFX.chestI }[ch.type];
+    const lv = ch.mhp > 1e8 ? 0 : dmgLvl(ch.hp / ch.mhp);
+    if (ch.type === 'O') img = GFX.oreD[Math.floor(time * 10) % 8][lv];
+    else img = GFX.chestD[ch.type][lv];
+    this.smoke(ch.x, ch.y - 2, lv, 8);
     this.shadow(ch.x, ch.y + img.height / 2 - 1, img.width / 2 + 1, 2.5);
     if (ch.type === 'L' || ch.type === 'O' || ch.type === 'A') { w.globalAlpha = .25 + Math.sin(time * 4) * .12; w.fillStyle = ch.type === 'L' ? '#ff3dd8' : ch.type === 'O' ? PAL[RAINBOW[Math.floor(time * 8) % 8]] : '#ffe14d'; w.beginPath(); w.arc(ch.x, ch.y, img.width * .8, 0, TAU); w.fill(); w.globalAlpha = 1; }
     const sh = ch.flash > 0 ? (Math.random() - .5) * 2 : 0;
@@ -156,6 +158,12 @@ const Render = {
     if ((ch.type === 'A' || ch.type === 'G' || ch.type === 'O') && Math.random() < .04) Particles.add(ch.x + rnd(-8, 8), ch.y + rnd(-8, 6), 0, -10, .5, 2, C_WHITE, 1);
     if (ch.type === 'L') { this.spr(GFX.key, ch.x, ch.y - 14 + Math.sin(time * 3) * 1.5); }
     if (ch.hp < ch.mhp && ch.mhp < 1e8) this.bar(ch.x, ch.y - img.height / 2 - 4, 16, ch.hp / ch.mhp, '#ffe14d');
+  },
+  // ダメージに応じて煙・火花
+  smoke(x, y, lv, spread) {
+    if (!lv) return; const r = Math.random();
+    if (r < [0, .05, .14, .3][lv]) Particles.add(x + rnd(-spread, spread) * .6, y + rnd(-spread, spread) * .4, rnd(-6, 6), rnd(-34, -18), rnd(.6, 1.1), lv >= 2 ? 4 : 3, lv >= 3 && Math.random() < .5 ? C_DARK : C_SMOKE, 1.2);
+    if (lv >= 3 && Math.random() < .14) Particles.add(x + rnd(-spread, spread) * .5, y + rnd(-spread, spread) * .4, rnd(-20, 20), rnd(-40, -10), .3, 2, Math.random() < .5 ? C_ORA : C_YEL, 2);
   },
   bar(x, y, wd, f, col) { const w = this.w; x = Math.round(x - wd / 2); y = Math.round(y); w.fillStyle = '#0b0b18'; w.fillRect(x - 1, y - 1, wd + 2, 4); w.fillStyle = '#3a3a4a'; w.fillRect(x, y, wd, 2); w.fillStyle = col; w.fillRect(x, y, Math.max(0, Math.round(wd * clamp(f, 0, 1))), 2); },
   drawFreeMachine(m, time) {
@@ -168,7 +176,7 @@ const Render = {
     this.spr(GFX.machineFree[m.m], m.x, m.y + bob - 2, m.a, false, 1.35);
   },
   drawEnemy(e, time) {
-    const T = ENEMIES[e.tp], img = e.flash > 0 ? GFX.enemyW[e.tp] : GFX.enemy[e.tp];
+    const T = ENEMIES[e.tp], lv = dmgLvl(e.hp / e.mhp), img = e.flash > 0 ? GFX.enemyW[e.tp] : GFX.enemyD[e.tp][lv]; this.smoke(e.x, e.y - 2, lv, 7);
     let bob = 0, sq = 1;
     if (T.beh === 'hop' || T.beh === 'flee') bob = -Math.abs(Math.sin(e.t * (T.beh === 'flee' ? 8 : 5))) * 4;
     else if (T.beh === 'fly') bob = -4 + Math.sin(e.t * 10) * 2;
@@ -183,7 +191,8 @@ const Render = {
     const w = this.w;
     if (wl.legend) { w.globalAlpha = .45; w.fillStyle = PAL[RAINBOW[Math.floor(time * 12) % 8]]; w.beginPath(); w.arc(wl.x, wl.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; }
     this.shadow(wl.x, wl.y + 7, 7, 2.5);
-    this.spr(wl.flash > 0 ? GFX.machineW[wl.m] : GFX.machine[wl.m], wl.x, wl.y, wl.a);
+    const wlv = wl.mhp ? dmgLvl(wl.hp / wl.mhp) : 0; this.smoke(wl.x, wl.y, wlv, 7);
+    this.spr(wl.flash > 0 ? GFX.machineW[wl.m] : GFX.machineD[wl.m][wlv], wl.x, wl.y, wl.a);
     if (wl.stun > 0) {
       for (let i = 0; i < 3; i++) { const a = time * 4 + i * TAU / 3; w.fillStyle = '#ffe14d'; w.fillRect(Math.round(wl.x + Math.cos(a) * 9) - 1, Math.round(wl.y - 12 + Math.sin(a) * 3) - 1, 3, 3); }
     } else if (wl.mhp) this.bar(wl.x, wl.y - 13, 16, wl.hp / wl.mhp, '#3dffe0');
@@ -205,7 +214,8 @@ const Render = {
     const blink = p.inv > 0 && Math.floor(time * 15) % 2;
     // 残像(疾走感)
     if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.a, life: .16 });
-    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machine[p.m], p.x, p.y, p.a, false, big ? 1.65 : 1);
+    const plv = dmgLvl(p.hp / 100); this.smoke(p.x, p.y, plv, big ? 10 : 7);
+    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machineD[p.m][plv], p.x, p.y, p.a, false, big ? 1.65 : 1);
     // バフ
     if (p.buf) {
       if (p.buf.bar > 0) { w.globalAlpha = .35 + Math.sin(time * 10) * .15; w.fillStyle = '#8ad0ff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; w.strokeStyle = '#ffffff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.stroke(); }
@@ -228,11 +238,13 @@ const Render = {
     w.globalAlpha = .25 + Math.sin(time * 5) * .1; w.fillStyle = b.st === 'charge' ? '#ff2d2d' : '#a03dff'; w.beginPath(); w.arc(b.x, b.y, 50, 0, TAU); w.fill(); w.globalAlpha = 1;
     if (Math.random() < .5) Particles.add(b.x + rnd(-36, 36), b.y + rnd(-30, 36), 0, -30, .8, 3, Math.random() < .5 ? C_PUR : C_DARK, 1);
     const sc = b.st === 'charge' ? 1.62 : 1.5;
-    this.spr(b.flash > 0 ? GFX.bossW : GFX.boss, b.x, b.y + bob, 0, (b.vx || 0) < 0, sc);
+    const blv = dmgLvl(b.hp / b.mhp); this.smoke(b.x, b.y, blv, 40); this.smoke(b.x, b.y, blv, 40);
+    this.spr(b.flash > 0 ? GFX.bossW : GFX.bossD[blv], b.x, b.y + bob, 0, (b.vx || 0) < 0, sc);
   },
   drawFish(f, time) {
     this.shadow(f.x, f.y + 30, 42, 9);
-    const img = f.flash > 0 ? GFX.fishW : GFX.fish[Math.floor(time * 8) % 8];
+    const flv = dmgLvl(f.hp / f.mhp); this.smoke(f.x, f.y, flv, 44);
+    const img = f.flash > 0 ? GFX.fishW : GFX.fishD[Math.floor(time * 8) % 8][flv];
     const left = Math.cos(f.a) < 0;
     this.spr(img, f.x, f.y + Math.sin(time * 2) * 3, 0, left, 1.4);
   },

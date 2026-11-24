@@ -121,7 +121,7 @@ const ENEMIES_BASE = [
   { name: 'メダマン', spr: 'eye', hp: 18, spd: 28, drop: 3, r: 6, touch: 3, beh: 'shoot' },
   { name: 'スピードラビット', spr: 'rabbit', hp: 12, spd: 120, drop: -1, r: 6, touch: 3, beh: 'flee' },
 ];
-const ENEMIES = ENEMIES_BASE.map(e => Object.assign({}, e, { spd: e.spd * 1.35 }));
+const ENEMIES = ENEMIES_BASE.map(e => Object.assign({}, e, { spd: e.spd * .85 })); // 足は遅め
 
 // ============================================================
 //  スプライト
@@ -163,6 +163,22 @@ const ICON_SYM = {
   part: ['...w...', '..www..', 'wwwwwww', '.wwwww.', '..www..', '.ww.ww.', 'w.....w'],
 };
 
+// ダメージ表現: 黒く焦げ、焦げ跡が付き、ひび割れが入る(スプライトの形の中だけ)
+function damageSprite(src, lvl, seed) {
+  const w = src.width, h = src.height, c = mkCanvas(w, h), x = c.getContext('2d'), r = RNG(seed * 131 + lvl * 17);
+  x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-atop';
+  x.fillStyle = `rgba(25,12,10,${[0, .16, .3, .46][lvl]})`; x.fillRect(0, 0, w, h);
+  const area = w * h;
+  for (let i = 0; i < lvl * (2 + area / 90); i++) { const s = r() < .4 ? 2 : 1; x.fillStyle = r() < .3 ? 'rgba(90,40,20,.7)' : 'rgba(8,4,4,.65)'; x.fillRect(Math.floor(r() * w), Math.floor(r() * h), s, s); }
+  const n = lvl * Math.max(1, Math.round((w + h) / 14));
+  for (let k = 0; k < n; k++) {
+    let px = Math.floor(w * .15 + r() * w * .7), py = Math.floor(h * .15 + r() * h * .7), dx = r() < .5 ? 1 : -1, dy = r() < .5 ? 1 : -1; const len = 3 + Math.floor(r() * (w + h) / 4);
+    for (let s = 0; s < len; s++) { x.fillStyle = '#100606'; x.fillRect(px, py, 1, 1); x.fillStyle = 'rgba(255,240,220,.22)'; x.fillRect(px + 1, py, 1, 1); if (r() < .5) px += dx; else py += dy; if (r() < .18) { dx = -dx; } }
+  }
+  x.globalCompositeOperation = 'source-over'; return c;
+}
+function damageSet(src, seed) { return [src, damageSprite(src, 1, seed), damageSprite(src, 2, seed), damageSprite(src, 3, seed)]; }
+const dmgLvl = f => f > .7 ? 0 : f > .45 ? 1 : f > .22 ? 2 : 3;
 function outlined(src, col) {
   const c = mkCanvas(src.width + 4, src.height + 4), x = c.getContext('2d'), sil = silhouette(src, col);
   for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-1, -1], [1, -1], [-1, 1], [1, 1], [-2, -1], [2, 1], [-1, 2], [1, -2]]) x.drawImage(sil, 2 + dx, 2 + dy);
@@ -241,6 +257,9 @@ function buildGFX() {
   GFX.machineFree = GFX.machine.map((s, i) => outlined(s, i === 0 ? '#ffffff' : MACHINES[i].legend ? '#ffe14d' : STAT_COL[MACHINES[i].best]));
   GFX.enemy = ENEMIES.map(e => pixArt(ENEMY_ART[e.spr].rows, ENEMY_ART[e.spr].pal));
   GFX.enemyW = GFX.enemy.map(s => silhouette(s));
+  // HPが減った時のボロボロ版(0=無傷 1=傷 2=ひび 3=ボロボロ)
+  GFX.machineD = GFX.machine.map((s, i) => damageSet(s, i + 1));
+  GFX.enemyD = GFX.enemy.map((s, i) => damageSet(s, i + 50));
   GFX.patch = PATCH_SYM.map((s, i) => plateIcon(s, STAT_COL[i], '#fff', 9));
   GFX.patchBig = PATCH_SYM.map((s, i) => plateIcon(s, STAT_COL[i], '#fff', 11));
   GFX.item = {}; GFX.itemUI = {};
@@ -260,8 +279,10 @@ function buildGFX() {
   const oreBig = mkCanvas(ore.width * 2, ore.height * 2); { const x = oreBig.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(ore, 0, 0, oreBig.width, oreBig.height); }
   GFX.ore = hueFrames(oreBig, 8);
   GFX.chestW = { B: silhouette(GFX.chestB), A: silhouette(GFX.chestA), G: silhouette(GFX.chestG), L: silhouette(GFX.chestL), I: silhouette(GFX.chestI), O: silhouette(oreBig) };
-  GFX.boss = buildBoss(); GFX.bossW = silhouette(GFX.boss);
-  GFX.fish = hueFrames(buildFish(), 8); GFX.fishW = silhouette(GFX.fish[0]);
+  GFX.boss = buildBoss(); GFX.bossW = silhouette(GFX.boss); GFX.bossD = damageSet(GFX.boss, 90);
+  GFX.fish = hueFrames(buildFish(), 8); GFX.fishW = silhouette(GFX.fish[0]); GFX.fishD = GFX.fish.map(s => damageSet(s, 91));
+  GFX.chestD = { B: damageSet(GFX.chestB, 70), A: damageSet(GFX.chestA, 71), G: damageSet(GFX.chestG, 72), L: [GFX.chestL, GFX.chestL, GFX.chestL, GFX.chestL], I: damageSet(GFX.chestI, 73) };
+  GFX.oreD = GFX.ore.map(s => damageSet(s, 74));
   GFX.balls = [
     buildCircle(13, '#ff8a2e', (dx, dy) => (Math.abs(dx) < .7 || Math.abs(dy) < .7 || Math.abs(Math.abs(dx) - 8 + dy * dy / 40) < .7) ? '#3a1a00' : (dx < -3 && dy < -3 ? '#ffb070' : '#ff8a2e')),
     buildCircle(12, '#f4f4f4', (dx, dy) => (Math.abs(Math.abs(dx) - 8 - dy * dy / 60) < .8 && (Math.round(dy) % 2 === 0)) ? '#e0283a' : (dx < -3 && dy < -3 ? '#ffffff' : '#e6e6e6')),
