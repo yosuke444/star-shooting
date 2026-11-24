@@ -338,7 +338,7 @@ class Game {
       const spd = S.spd * (S.varSpd ? rnd(.75, 1.1) : 1);
       let ox = 0, oy = 0; if (S.par) { const off = (i - (S.n - 1) / 2) * S.par * 2; ox = -Math.sin(a) * off; oy = Math.cos(a) * off; }
       const x = p.x + Math.cos(a) * big + ox, y = p.y + Math.sin(a) * big + oy;
-      this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life: S.life * p.sr, dmg: S.dmg * p.sa, r: S.r, k: S.k, col: S.col, own: p.id, pierce: S.pierce ? [] : null, ph: i, big: S.big || 0, tr: S.trail || 0 });
+      this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life: S.life * p.sr, dmg: S.dmg * p.sa, r: S.r, k: S.k, col: S.col, own: p.id, pierce: S.pierce ? [] : null, ph: i, big: S.big || 0, tr: S.trail || 0, turn: S.turn });
     }
     this.fx('shot', p.x, p.y, S.big ? 1 : 0, Math.round(p.a * 100));
   }
@@ -455,7 +455,7 @@ class Game {
       if (alive) {
         if (b.k === 'home') {
           if ((this.tick + i) % 6 === 0) b.tg = this.findHomeTarget(b);
-          if (b.tg) { const ta = Math.atan2(b.tg.y - b.y, b.tg.x - b.x); b.ang += clamp(angDiff(b.ang, ta), -4.5 * dt, 4.5 * dt); b.vx = Math.cos(b.ang) * b.spd; b.vy = Math.sin(b.ang) * b.spd; }
+          if (b.tg) { const ta = Math.atan2(b.tg.y - b.y, b.tg.x - b.x); b.ang += clamp(angDiff(b.ang, ta), -(b.turn || 4.5) * dt, (b.turn || 4.5) * dt); b.vx = Math.cos(b.ang) * b.spd; b.vy = Math.sin(b.ang) * b.spd; }
           b.x += b.vx * dt; b.y += b.vy * dt;
         } else if (b.k === 'wave') {
           b.bx += b.vx * dt; b.by += b.vy * dt; const off = Math.sin(b.t * 16) * 9 * (b.ph ? 1 : -1);
@@ -473,7 +473,7 @@ class Game {
     B.length = w;
   }
   findHomeTarget(b) {
-    let best = null, bd = 170 * 170;
+    let best = null, bd = 230 * 230;
     for (const p of this.players) if (p.id !== b.own && !p.out && p.dead <= 0) { const d = d2(p.x, p.y, b.x, b.y); if (d < bd) { bd = d; best = p; } }
     for (const e of this.enemies) { const d = d2(e.x, e.y, b.x, b.y); if (d < bd) { bd = d; best = e; } }
     if (this.boss) { const d = d2(this.boss.x, this.boss.y, b.x, b.y); if (d < bd * 2) best = this.boss; }
@@ -492,7 +492,7 @@ class Game {
       if (!b.pierce) { alive = false; return true; }
       return false;
     };
-    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 8 : 6) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
+    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 11 : 6) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
     if (alive && own >= 0) {
       if (this.boss) tryHit(this.boss, 4, 38);
       if (alive && this.fish) tryHit(this.fish, 5, 42);

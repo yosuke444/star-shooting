@@ -55,9 +55,32 @@ const MACHINES = [
   { name: 'ケルベロス', tpl: 'cerb', col: '#6a3dbf', acc: '#ff4d4d', mul: [1.25, 1.05, 1.8, 1.1], shot: 'cerb', legend: 1, big: 1, desc: '伝説・鉄壁3連砲' },
 ];
 // 性能を尖らせる: 得意はより得意に、苦手はより苦手に(ミニノーマルは全部苦手のまま)
-MACHINES.forEach((M, i) => { M.mul = M.mul.map(v => i === 0 ? .75 : clamp(+(1 + (v - 1) * 1.9).toFixed(2), .35, 2.6)); M.best = M.mul.indexOf(Math.max(...M.mul)); });
+MACHINES.forEach((M, i) => { M.mul = M.mul.map(v => i === 0 ? .75 : clamp(+(1 + (v - 1) * 1.9).toFixed(2), .35, 2.6)); });
 // ゲームスピードアップ: 弾速 x1.3 / 連射 x0.85 (射程はやや伸びる)
 for (const k in SHOTS) { const S = SHOTS[k]; S.spd *= 1.3; S.life *= .88; S.rate *= .85; }
+// ---- バランス調整(CPU同士の対戦シミュレーション結果より) ----
+// 強すぎ → 長所は残して短所をさらに短所に / 弱すぎ → 長所をさらに長所に
+const BALANCE = {
+  2: [.81, 2.5, .43, 1],      // ジェットスター: スピードを伸ばす + 連射・弾の威力UP
+  3: [1.19, .32, 2.04, .4],   // フォートレス: スピード・レンジをさらに苦手に + 連射と弾速をさらに遅く
+  4: [1.8, .71, .53, 2.4],    // スナイパー: アタック・レンジを伸ばす + 一発の威力UP
+  5: [1.85, 1.38, .72, .3],   // スラッシャー: ディフェンス・レンジをさらに苦手に
+  6: [.9, 1, .9, 1.9],        // ホーミー: レンジを伸ばす + 追尾性能・弾速UP
+  7: [1.45, 1.38, .81, 1.38], // ウェーブライダー: 得意3つを伸ばす
+  8: [1.5, 1.19, 1, .81],     // ブーメラン: アタックを伸ばす
+  9: [1.48, .7, 1.19, .25],   // スキャッター: スピード・レンジをさらに苦手に
+  10: [1.7, .81, .71, 1.95],  // レーザーレイ: アタック・レンジを伸ばす + 威力UP
+  11: [1.19, 1, 1, .8],       // スプレッダー: レンジをさらに苦手に
+  13: [2.2, .9, .9, 2.6],     // リヴァイアサン: アタック・レンジを伸ばす + 威力UP
+  14: [1.48, .4, 2.52, 1.19], // ケルベロス: スピードを苦手に + 弾速・連射を遅く + 当たり判定を大きく
+};
+for (const i in BALANCE) MACHINES[i].mul = BALANCE[i];
+SHOTS.rapid.rate *= .47; SHOTS.rapid.dmg = 3.4;
+SHOTS.heavy.rate *= 1.35; SHOTS.heavy.spd *= .8;
+SHOTS.sniper.dmg = 31; SHOTS.laser.dmg = 13; SHOTS.levia.dmg = 15;
+SHOTS.homing.turn = 9; SHOTS.homing.spd *= 1.25;
+SHOTS.cerb.spd *= .75; SHOTS.cerb.rate *= 1.4;
+MACHINES.forEach(M => { M.best = M.mul.indexOf(Math.max(...M.mul)); });
 const LEGEND_IDS = [12, 13, 14];
 const NORMAL_SPAWN = [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11];
 

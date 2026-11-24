@@ -205,7 +205,7 @@ const Render = {
     const blink = p.inv > 0 && Math.floor(time * 15) % 2;
     // 残像(疾走感)
     if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.a, life: .16 });
-    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machine[p.m], p.x, p.y, p.a);
+    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machine[p.m], p.x, p.y, p.a, false, big ? 1.3 : 1);
     // バフ
     if (p.buf) {
       if (p.buf.bar > 0) { w.globalAlpha = .35 + Math.sin(time * 10) * .15; w.fillStyle = '#8ad0ff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; w.strokeStyle = '#ffffff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.stroke(); }

@@ -91,6 +91,17 @@ const AI = {
     const dx = G.x - p.x, dy = G.y - p.y, dist = Math.hypot(dx, dy); let ang = Math.atan2(dy, dx);
     // スタック検出
     A.stuckT += dt; if (A.stuckT > .8) { const mv = d2(p.x, p.y, A.lx, A.ly); A.lx = p.x; A.ly = p.y; A.stuckT = 0; if (mv < 15 * 15 && dist > 30) { A.unstuck = .6; A.uDir = Math.random() * TAU; } }
+    // 弾の回避(強さに応じた確率で、迫る弾の進路から横へ逃げる)
+    if (A.dodgeT > 0) { A.dodgeT -= dt; p.aiDir = A.dodgeDir; p.mask |= IN.Z; return; }
+    if ((g.tick + p.id) % 6 === 0 && !p.arw) {
+      for (const b of g.bullets) {
+        if (b.own === p.id) continue; const rx = p.x - b.x, ry = p.y - b.y; if (rx * rx + ry * ry > 80 * 80) continue;
+        const vv = b.vx * b.vx + b.vy * b.vy; if (!vv || rx * b.vx + ry * b.vy <= 0) continue; // 近づいてくる弾だけ
+        const cross = (rx * b.vy - ry * b.vx) / Math.sqrt(vv); if (Math.abs(cross) > 12) continue;
+        if (Math.random() < A.L.dodge * .7) { const ba = Math.atan2(b.vy, b.vx); A.dodgeDir = ba + (cross > 0 ? -1 : 1) * Math.PI / 2; A.dodgeT = .22; }
+        break;
+      }
+    }
     // 隕石の回避
     for (const m of g.meteors) if (m.kind !== 2 && m.t > m.fall * .3 && d2(m.x, m.y, p.x, p.y) < (m.r + 14) ** 2 && Math.random() < A.L.dodge + .2) { p.aiDir = Math.atan2(p.y - m.y, p.x - m.x); p.mask |= IN.Z; return; }
     // ビッグアロー チャージ中は狙いを合わせる
@@ -110,12 +121,12 @@ const AI = {
       const los = dist < 60 || g.map.los(p.x, p.y, G.x, G.y);
       if (!los) { p.aiDir = this.steer(g, p, ang); p.mask |= IN.Z; }
       else if (dist > range * .9) { p.aiDir = this.steer(g, p, aim); p.mask |= IN.Z; }
-      else if (isPlayer && dist < range * .35 && S.k !== 'blade' && S.k !== 'flame') {
-        p.aiDir = aim + A.strafe * 1.9; if (Math.random() < .02) A.strafe *= -1;
-      } else {
-        p.aiDir = aim; const off = Math.abs(angDiff(p.a, aim));
-        if (off < .35) p.mask |= IN.Z;
-        else if (isPlayer) p.aiDir = aim + A.strafe * .3;
+      else {
+        // 対プレイヤーは「撃つ時間」と「避ける時間」を交互に(近すぎる時は避けを長めに)
+        A.ph = (A.ph || 0) - dt;
+        if (A.ph <= 0) { A.shoot = !A.shoot; const close = dist < range * .35 && S.k !== 'blade' && S.k !== 'flame'; A.ph = A.shoot ? rnd(.6, 1.2) : rnd(.25, .5) * (close ? 1.6 : 1); if (Math.random() < .3) A.strafe *= -1; }
+        if (!isPlayer || A.shoot) { p.aiDir = aim; if (Math.abs(angDiff(p.a, aim)) < .35) p.mask |= IN.Z; }
+        else p.aiDir = aim + A.strafe * 1.9;
       }
       // アイテム使用
       if (p.items.length && Math.random() < .08) {
