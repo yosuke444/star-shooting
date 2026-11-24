@@ -235,7 +235,9 @@ const Scenes = {
       const me = g.players[Render.meId];
       if (me && me.out && g.phase === 'battle' && Input.hit(IN.X)) cycleFollow(g);
       if (g.phase === 'result' && Input.hit(IN.Z) && g.t < -1) { endGame(); return; }
-      this.acc += dt; let steps = 0;
+      // ヒットストップ: CPU戦では本当に時間を止める(オンラインは全員が止まるので見た目だけ)
+      const stopped = FX.stopT > 0 && Net.role !== 'host';
+      if (!stopped) this.acc += dt; let steps = 0;
       while (this.acc >= DT && steps < 4) {
         this.acc -= DT; steps++;
         if (me && !me.out) me.mask = Input.take();
@@ -257,7 +259,7 @@ const Scenes = {
       const me = v.players[v.you];
       const m = Input.take(); Net.sendInput(me && me.out ? 0 : m, performance.now(), Render.follow);
       if (me && me.out && v.phase === 'battle' && Input.hit(IN.X)) cycleFollow(v);
-      v.update(dt, m);
+      if (FX.stopT <= 0) v.update(dt, m);
       commonUpdate(v, dt);
     },
     draw(dt) {
@@ -269,7 +271,8 @@ const Scenes = {
 };
 function cycleFollow(V) { const alive = V.players.filter(p => !p.out); if (!alive.length) return; const i = alive.findIndex(p => p.id === Render.follow); Render.follow = alive[(i + 1) % alive.length].id; Sound.play('move'); }
 function commonUpdate(V, dt) {
-  Particles.update(dt); FxObjs.update(dt, V); UI.update(dt); UI.watch(V); Render.updateCam(V, dt);
+  const hs = FX.stopT > 0; FX.stopT = Math.max(0, FX.stopT - dt);
+  if (!hs) { Particles.update(dt); FxObjs.update(dt, V); } UI.update(dt); UI.watch(V); Render.updateCam(V, dt);
   FX.shake = Math.max(0, FX.shake - dt * 30); FX.flash = Math.max(0, FX.flash - dt); FX.hurt = Math.max(0, FX.hurt - dt);
 }
 function drawPause() {
@@ -285,7 +288,7 @@ addEventListener('keydown', e => {
 
 function prepRun() {
   Input.latch = 0;
-  Particles.n = 0; FxObjs.list = []; UI.reset(); FX.shake = FX.flash = FX.hurt = 0; Render.cam.snap = true;
+  Particles.n = 0; FxObjs.list = []; UI.reset(); FX.shake = FX.flash = FX.hurt = FX.stopT = 0; Render.cam.snap = true;
 }
 function startGame() {
   const humans = [{ name: Settings.name, local: true }];

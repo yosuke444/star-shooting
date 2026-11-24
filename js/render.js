@@ -10,10 +10,23 @@ const Render = {
     this.main = main; this.ctx = main.getContext('2d');
     this.wc = mkCanvas(LW, LH); this.w = this.wc.getContext('2d');
     this.ctx.imageSmoothingEnabled = false; this.w.imageSmoothingEnabled = false;
+    // 宇宙背景: 星雲 + 3層の星(視差スクロールで疾走感)
+    const r = RNG(4242);
+    this.neb = mkCanvas(512, 512); { const x = this.neb.getContext('2d'); x.fillStyle = '#05051a'; x.fillRect(0, 0, 512, 512);
+      for (let i = 0; i < 14; i++) { const cx = r() * 512, cy = r() * 512, rad = 60 + r() * 140, col = r.pick(['80,40,180', '30,90,200', '160,40,140', '20,140,160', '60,30,120']);
+        for (const ox of [-512, 0, 512]) for (const oy of [-512, 0, 512]) { const g = x.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, rad); g.addColorStop(0, `rgba(${col},.35)`); g.addColorStop(1, `rgba(${col},0)`); x.fillStyle = g; x.fillRect(cx + ox - rad, cy + oy - rad, rad * 2, rad * 2); } } }
+    this.starL = [[.12, 90, ['#5a5a9a', '#7a6ab0']], [.3, 55, ['#a0a0e0', '#8ad0ff']], [.55, 28, ['#ffffff', '#fff3b0', '#ffb0e0']]].map(([p, n, cols], li) => {
+      const c = mkCanvas(256, 256), x = c.getContext('2d'); for (let i = 0; i < n; i++) { x.fillStyle = r.pick(cols); const s = li === 2 && r() < .3 ? 2 : 1; x.fillRect(Math.floor(r() * 256), Math.floor(r() * 256), s, s); if (li === 2 && r() < .15) { x.fillRect(Math.floor(r() * 256), Math.floor(r() * 256), 1, 3); } } return { p, c };
+    });
+  },
+  drawSpace(c, time) {
+    const w = this.w, tile = (img, size, p) => { const ox = -((c.x * p) % size + size) % size, oy = -((c.y * p) % size + size) % size; for (let y = oy; y < LH; y += size) for (let x = ox; x < LW; x += size) w.drawImage(img, Math.round(x), Math.round(y)); };
+    tile(this.neb, 512, .06);
+    for (const L of this.starL) tile(L.c, 256, L.p);
   },
   // ワールド座標 → メインキャンバス座標
-  sx(x) { return ((x - this.cam.x) * this.cam.zoom + LW / 2) * 2; },
-  sy(y) { return ((y - this.cam.y) * this.cam.zoom + LH / 2) * 2; },
+  sx(x) { return ((x - this.cam.x) * this.cam.zoom + LW / 2) * SCALE; },
+  sy(y) { return ((y - this.cam.y) * this.cam.zoom + LH / 2) * SCALE; },
   onScreen(x, y, m = 20) { const c = this.cam, hw = LW / 2 / c.zoom + m, hh = LH / 2 / c.zoom + m; return Math.abs(x - c.x) < hw && Math.abs(y - c.y) < hh; },
 
   updateCam(V, dt) {
@@ -25,7 +38,8 @@ const Render = {
     const c = this.cam;
     let zoom = 1; if (me && me.arw && !me.out) zoom = .5;
     if (V.phase === 'roulette' || V.phase === 'result') zoom = 1;
-    c.zoom = lerp(c.zoom, zoom, Math.min(1, dt * 4));
+    c.kick = Math.max(0, (c.kick || 0) - dt * 1.2); // 爆発時のズームパンチ
+    c.base = lerp(c.base || 1, zoom, Math.min(1, dt * 4)); c.zoom = c.base * (1 + c.kick);
     if (tgt) {
       const lead = 0.25; const tx = tgt.x + (tgt.vx || 0) * lead, ty = tgt.y + (tgt.vy || 0) * lead;
       if (c.snap) { c.x = tx; c.y = ty; c.snap = false; }
@@ -40,7 +54,7 @@ const Render = {
     const w = this.w, c = this.cam, z = c.zoom;
     let shx = 0, shy = 0; if (FX.shake > 0) { shx = (Math.random() - .5) * FX.shake; shy = (Math.random() - .5) * FX.shake; }
     const ox = Math.round(LW / 2 - c.x * z + shx), oy = Math.round(LH / 2 - c.y * z + shy);
-    w.setTransform(1, 0, 0, 1, 0, 0); w.fillStyle = '#07071a'; w.fillRect(0, 0, LW, LH);
+    w.setTransform(1, 0, 0, 1, 0, 0); this.drawSpace(c, time);
     w.setTransform(z, 0, 0, z, ox, oy);
     const hw = LW / 2 / z, hh = LH / 2 / z, X0 = c.x - hw - 32, Y0 = c.y - hh - 32, X1 = c.x + hw + 32, Y1 = c.y + hh + 32;
     this.drawTiles(V, X0, Y0, X1, Y1, time);
@@ -72,7 +86,7 @@ const Render = {
     const tx0 = Math.max(-2, Math.floor(X0 / TILE)), ty0 = Math.max(-2, Math.floor(Y0 / TILE)), tx1 = Math.min(M.tw + 1, Math.ceil(X1 / TILE)), ty1 = Math.min(M.th + 1, Math.ceil(Y1 / TILE));
     const over = M.over, grow = Math.min(1, M.overT);
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
-      const t = M.get(tx, ty), arr = TILES[t] || TILES[26];
+      const t = M.get(tx, ty), arr = TILES[t]; if (!arr) continue;
       const v = arr.length > 1 ? ((tx * 73856093) ^ (ty * 19349663)) >>> 0 : 0;
       w.drawImage(arr[v % arr.length], tx * TILE, ty * TILE);
       if (t === 8 && ((tx + ty + Math.floor(time * 3)) % 5 === 0)) { w.fillStyle = '#ffe14d60'; w.fillRect(tx * TILE + 3, ty * TILE + 6, 8, 2); }
@@ -146,10 +160,12 @@ const Render = {
   bar(x, y, wd, f, col) { const w = this.w; x = Math.round(x - wd / 2); y = Math.round(y); w.fillStyle = '#0b0b18'; w.fillRect(x - 1, y - 1, wd + 2, 4); w.fillStyle = '#3a3a4a'; w.fillRect(x, y, wd, 2); w.fillStyle = col; w.fillRect(x, y, Math.max(0, Math.round(wd * clamp(f, 0, 1))), 2); },
   drawFreeMachine(m, time) {
     const w = this.w, M = MACHINES[m.m]; const bob = Math.sin(time * 2.5 + m.id) * 1.5;
-    this.shadow(m.x, m.y + 7, 7, 2.5);
-    w.globalAlpha = .3 + Math.sin(time * 3 + m.id) * .15; w.strokeStyle = M.legend ? PAL[RAINBOW[Math.floor(time * 10) % 8]] : M.col; w.lineWidth = 1;
-    w.beginPath(); w.arc(m.x, m.y, 11 + Math.sin(time * 3) * 1.5, 0, TAU); w.stroke(); w.globalAlpha = 1;
-    this.spr(GFX.machine[m.m], m.x, m.y + bob - 2, m.a);
+    const col = m.m === 0 ? '#ffffff' : M.legend ? PAL[RAINBOW[Math.floor(time * 10) % 8]] : STAT_COL[M.best];
+    this.shadow(m.x, m.y + 9, 10, 3);
+    w.globalAlpha = .45 + Math.sin(time * 4 + m.id) * .2; w.strokeStyle = col; w.lineWidth = 2;
+    w.beginPath(); w.arc(m.x, m.y, 15 + Math.sin(time * 4) * 2, 0, TAU); w.stroke(); w.globalAlpha = 1;
+    if (Math.random() < .08) Particles.add(m.x + rnd(-10, 10), m.y + rnd(-6, 8), 0, -25, .6, 2, PC(col), 1);
+    this.spr(GFX.machineFree[m.m], m.x, m.y + bob - 2, m.a, false, 1.35);
   },
   drawEnemy(e, time) {
     const T = ENEMIES[e.tp], img = e.flash > 0 ? GFX.enemyW[e.tp] : GFX.enemy[e.tp];
@@ -157,8 +173,10 @@ const Render = {
     if (T.beh === 'hop' || T.beh === 'flee') bob = -Math.abs(Math.sin(e.t * (T.beh === 'flee' ? 8 : 5))) * 4;
     else if (T.beh === 'fly') bob = -4 + Math.sin(e.t * 10) * 2;
     else bob = Math.sin(e.t * 3) * .8;
-    this.shadow(e.x, e.y + 6, 5, 2);
-    this.spr(img, e.x, e.y + bob, 0, e.face < 0);
+    // 敵は赤いオーラ
+    const w = this.w, pul = .28 + Math.sin(time * 6 + e.id) * .1; w.globalAlpha = pul; w.fillStyle = '#ff2030'; w.beginPath(); w.arc(e.x, e.y + bob, 11, 0, TAU); w.fill(); w.globalAlpha = pul * 1.6; w.strokeStyle = '#ff4d4d'; w.lineWidth = 1; w.beginPath(); w.arc(e.x, e.y + bob, 12 + Math.sin(time * 8 + e.id) * 1.5, 0, TAU); w.stroke(); w.globalAlpha = 1;
+    this.shadow(e.x, e.y + 8, 6, 2);
+    this.spr(img, e.x, e.y + bob, 0, e.face < 0, 1.25);
     if (e.hp < e.mhp) this.bar(e.x, e.y - 12, 12, e.hp / e.mhp, STAT_COL[T.drop < 0 ? 1 : T.drop]);
   },
   drawWild(wl, time) {
@@ -185,6 +203,8 @@ const Render = {
     if (spd > 50 && Math.random() < .6) { const a = p.a + Math.PI; Particles.add(p.x + Math.cos(a) * 7, p.y + Math.sin(a) * 7, Math.cos(a) * 30 + rnd(-10, 10), Math.sin(a) * 30 + rnd(-10, 10), .3, 2, p.buf && p.buf.jet > 0 ? C_YEL : (M.legend ? RAINBOW[(Math.random() * 8) | 0] : C_ORA), 3); }
     if (M.legend && Math.random() < .3) Particles.add(p.x + rnd(-6, 6), p.y + rnd(-6, 6), 0, -15, .6, 2, RAINBOW[(Math.random() * 8) | 0], 1);
     const blink = p.inv > 0 && Math.floor(time * 15) % 2;
+    // 残像(疾走感)
+    if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.a, life: .16 });
     if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machine[p.m], p.x, p.y, p.a);
     // バフ
     if (p.buf) {
@@ -204,18 +224,19 @@ const Render = {
   },
   drawBoss(b, time) {
     const w = this.w, bob = Math.sin(time * 3) * 2;
-    this.shadow(b.x, b.y + 26, 26, 8);
-    if (b.st === 'charge') { w.globalAlpha = .4; w.fillStyle = '#ff2d2d'; w.beginPath(); w.arc(b.x, b.y, 34, 0, TAU); w.fill(); w.globalAlpha = 1; }
-    const sc = b.st === 'charge' ? 1.06 : 1;
+    this.shadow(b.x, b.y + 38, 38, 11);
+    w.globalAlpha = .25 + Math.sin(time * 5) * .1; w.fillStyle = b.st === 'charge' ? '#ff2d2d' : '#a03dff'; w.beginPath(); w.arc(b.x, b.y, 50, 0, TAU); w.fill(); w.globalAlpha = 1;
+    if (Math.random() < .5) Particles.add(b.x + rnd(-36, 36), b.y + rnd(-30, 36), 0, -30, .8, 3, Math.random() < .5 ? C_PUR : C_DARK, 1);
+    const sc = b.st === 'charge' ? 1.62 : 1.5;
     this.spr(b.flash > 0 ? GFX.bossW : GFX.boss, b.x, b.y + bob, 0, (b.vx || 0) < 0, sc);
   },
   drawFish(f, time) {
-    this.shadow(f.x, f.y + 22, 30, 7);
+    this.shadow(f.x, f.y + 30, 42, 9);
     const img = f.flash > 0 ? GFX.fishW : GFX.fish[Math.floor(time * 8) % 8];
     const left = Math.cos(f.a) < 0;
-    this.spr(img, f.x, f.y + Math.sin(time * 2) * 3, 0, left);
+    this.spr(img, f.x, f.y + Math.sin(time * 2) * 3, 0, left, 1.4);
   },
-  drawBall(b) { this.shadow(b.x, b.y + 13, 12, 4); this.spr(GFX.balls[b.kind], b.x, b.y - 2, b.rot); },
+  drawBall(b) { this.shadow(b.x, b.y + 20, 19, 6); this.spr(GFX.balls[b.kind], b.x, b.y - 3, b.rot, false, 1.55); },
   drawWarp(wp, time) {
     const w = this.w;
     for (const [x, y] of [[wp.x, wp.y], [wp.x2, wp.y2]]) {
@@ -267,6 +288,7 @@ const Render = {
         }
         default: {
           const r = b.r + (b.big ? 1 : 0);
+          w.globalCompositeOperation = 'lighter'; w.globalAlpha = .35; w.fillStyle = C[1]; w.beginPath(); w.arc(x, y, r + 4, 0, TAU); w.fill(); w.globalAlpha = 1; w.globalCompositeOperation = 'source-over';
           if (b.tr) { w.strokeStyle = C[1]; w.lineWidth = Math.max(1, r); w.globalAlpha = .7; w.beginPath(); w.moveTo(x, y); w.lineTo(x - b.vx * .03, y - b.vy * .03); w.stroke(); w.globalAlpha = 1; }
           w.fillStyle = C[1]; if (r <= 2) { w.fillRect(x - 2, y - 2, 4, 4); w.fillStyle = C[0]; w.fillRect(x - 1, y - 1, 2, 2); }
           else { w.beginPath(); w.arc(x, y, r + 1, 0, TAU); w.fill(); w.fillStyle = C[0]; w.beginPath(); w.arc(x, y, r * .55, 0, TAU); w.fill(); }

@@ -58,14 +58,14 @@ class Game {
   }
   id() { return this.nextId++; }
   n() { return this.players.length; }
-  machineTarget() { return Math.round(7 + this.n() * .9); }
-  enemyTarget() { return Math.min(140, Math.round(10 + this.n() * 1.8)); }
-  chestTarget() { return Math.min(60, Math.round(4 + this.n() * .55)); }
+  machineTarget() { return Math.round(3 + this.n() * .45); }
+  enemyTarget() { return Math.min(200, Math.round(16 + this.n() * 3)); }
+  chestTarget() { return Math.min(90, Math.round(8 + this.n() * 1.1)); }
 
   // ---------- FX ----------
   fx(type, x, y, a = 0, b = 0, c = 0) { this.fxq.push([type, Math.round(x), Math.round(y), a, b, c]); if (this.onFx) this.onFx(type, x, y, a, b, c); }
   gfxEv(...args) { this.gfx.push(args); if (this.onGfx) this.onGfx(args); }
-  note(p, txt, col = '#fff') { p.notes.push([txt, col]); }
+  note(p, txt, col = '#fff', icon) { p.notes.push(icon ? [txt, col, icon] : [txt, col]); } // icon 付きは画面にドンと出る
 
   // ---------- ステータス ----------
   calcStats(p) {
@@ -90,7 +90,7 @@ class Game {
   spawnEnemyGroup(pos, types, cnt) {
     pos = pos || this.spawnPos(8, 220);
     if (!types) { types = [rndi(0, 3)]; if (Math.random() < .4) types.push(rndi(0, 3)); }
-    cnt = cnt || rndi(3, 6);
+    cnt = cnt || rndi(4, 7);
     for (let i = 0; i < cnt; i++) {
       const tp = pick(types), a = Math.random() * TAU, d = rnd(5, 40);
       const e = { id: this.id(), tp, x: pos.x + Math.cos(a) * d, y: pos.y + Math.sin(a) * d, vx: 0, vy: 0, hp: ENEMIES[tp].hp, mhp: ENEMIES[tp].hp, t: Math.random() * 3, cd: 0, flash: 0, tgt: null, thk: 0, dir: Math.random() * TAU, face: 1 };
@@ -140,19 +140,19 @@ class Game {
     if (left.length) this.scatter(p.x, p.y, left, 50);
   }
   applyPickup(p, k) {
-    if (k < PK_ITEM) { const g = this.addStat(p, k); this.note(p, g ? '+' + STAT_SHORT[k] : STAT_SHORT[k] + ' MAX', STAT_COL[k]); return true; }
+    if (k < PK_ITEM) { const g = this.addStat(p, k); this.note(p, g ? STAT_NAME[k] + ' UP!' : STAT_NAME[k] + ' MAX', STAT_COL[k], 's' + k); return true; }
     if (isPart(k)) { this.gainPart(p, k - PK_PART); return true; }
-    if (k === PK_KEY) { if (p.key) return false; p.key = true; this.note(p, '鍵をゲット!', '#ffe14d'); this.gfxEv('key', p.id); return true; }
+    if (k === PK_KEY) { if (p.key) return false; p.key = true; this.note(p, '鍵をゲット!', '#ffe14d', 'k'); this.gfxEv('key', p.id); return true; }
     const key = ITEM_KEYS[k - PK_ITEM], it = ITEMS[key];
-    if (it.rar === 'N') { this.activate(p, key); this.note(p, it.name + '!', RAR_COL.N); return true; }
-    if (key === 'tv') { p.tv = true; this.note(p, '番組表をゲット! イベント予定が見える', RAR_COL.SR); return true; }
+    if (it.rar === 'N') { this.activate(p, key); this.note(p, it.name + '!', RAR_COL.N, 'i' + key); return true; }
+    if (key === 'tv') { p.tv = true; this.note(p, '番組表ゲット!', RAR_COL.SR, 'itv'); return true; }
     if (p.items.length >= 2) return false;
-    p.items.push({ k: key, n: it.uses || 1 }); this.note(p, it.name + ' をゲット!', RAR_COL.R); return true;
+    p.items.push({ k: key, n: it.uses || 1 }); this.note(p, it.name + ' ゲット!', RAR_COL.R, 'i' + key); return true;
   }
   gainPart(p, k) {
     const L = this.legend; if (L.done[k]) return;
     p.parts[k]++; const mid = L.order[k];
-    this.note(p, MACHINES[mid].name + 'のパーツ ' + p.parts[k] + '/3', MACHINES[mid].col);
+    this.note(p, MACHINES[mid].name + 'のパーツ ' + p.parts[k] + '/3', MACHINES[mid].col, 'p' + k);
     if (p.parts[k] >= 3) {
       L.done[k] = true;
       for (const q of this.players) q.parts[k] = 0;
@@ -201,8 +201,8 @@ class Game {
     for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, p.x, p.y);
     for (const e of this.enemies) if (test(e, 6)) this.hit(e, 2, dmg, p.id, p.x, p.y);
     for (const c of this.chests) if (test(c, 9)) this.hit(c, 3, dmg, p.id, p.x, p.y);
-    if (this.boss && test(this.boss, 26)) this.hit(this.boss, 4, dmg, p.id, p.x, p.y);
-    if (this.fish && test(this.fish, 30)) this.hit(this.fish, 5, dmg, p.id, p.x, p.y);
+    if (this.boss && test(this.boss, 38)) this.hit(this.boss, 4, dmg, p.id, p.x, p.y);
+    if (this.fish && test(this.fish, 42)) this.hit(this.fish, 5, dmg, p.id, p.x, p.y);
     for (const w of this.wilds) if (test(w, 8)) this.hit(w, 6, dmg, p.id, p.x, p.y);
   }
   // 範囲内の全ターゲットに対して
@@ -211,8 +211,8 @@ class Game {
     for (const q of this.players) if (!q.out && q.dead <= 0 && d2(q.x, q.y, x, y) < R2(7)) fn(q, 1);
     for (const e of this.enemies) if (d2(e.x, e.y, x, y) < R2(6)) fn(e, 2);
     for (const c of this.chests) if (d2(c.x, c.y, x, y) < R2(9)) fn(c, 3);
-    if (this.boss && d2(this.boss.x, this.boss.y, x, y) < R2(26)) fn(this.boss, 4);
-    if (this.fish && d2(this.fish.x, this.fish.y, x, y) < R2(30)) fn(this.fish, 5);
+    if (this.boss && d2(this.boss.x, this.boss.y, x, y) < R2(38)) fn(this.boss, 4);
+    if (this.fish && d2(this.fish.x, this.fish.y, x, y) < R2(42)) fn(this.fish, 5);
     for (const w of this.wilds) if (d2(w.x, w.y, x, y) < R2(8)) fn(w, 6);
   }
   // ---------- ダメージ ----------
@@ -340,7 +340,7 @@ class Game {
       const x = p.x + Math.cos(a) * big + ox, y = p.y + Math.sin(a) * big + oy;
       this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life: S.life * p.sr, dmg: S.dmg * p.sa, r: S.r, k: S.k, col: S.col, own: p.id, pierce: S.pierce ? [] : null, ph: i, big: S.big || 0, tr: S.trail || 0 });
     }
-    this.fx('shot', p.x, p.y, S.big ? 1 : 0);
+    this.fx('shot', p.x, p.y, S.big ? 1 : 0, Math.round(p.a * 100));
   }
   enemyShot(x, y, a, spd, dmg, own, col = 15, r = 3, life = 1.6) {
     this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life, dmg, r, k: 'b', col, own, pierce: null, ph: 0, big: r > 3 ? 1 : 0, tr: 0 });
@@ -418,10 +418,10 @@ class Game {
       return;
     }
     // 向き・移動
-    if (dir !== null) p.a += clamp(angDiff(p.a, dir), -9 * dt, 9 * dt);
-    const maxS = Math.min(380, 80 * p.ss);
+    if (dir !== null) p.a += clamp(angDiff(p.a, dir), -12 * dt, 12 * dt);
+    const maxS = Math.min(460, 108 * p.ss);
     let tgt = 0; if (z) tgt = maxS; else if (dir !== null) tgt = maxS * .62;
-    const k = Math.min(1, dt * (tgt > 0 ? 5 : 3));
+    const k = Math.min(1, dt * (tgt > 0 ? 7 : 3.5));
     p.vx += (Math.cos(p.a) * tgt - p.vx) * k; p.vy += (Math.sin(p.a) * tgt - p.vy) * k;
     this.map.move(p, p.vx * dt, p.vy * dt, r);
     // 床・ゾーン
@@ -488,14 +488,14 @@ class Game {
       const rr = r + ext; if (d2(o.x, o.y, b.x, b.y) > rr * rr) return false;
       if (b.pierce) { const key = kind * 100000 + (o.id || 0); if (b.pierce.includes(key)) return false; b.pierce.push(key); }
       this.hit(o, kind, b.dmg, own, b.x, b.y);
-      this.fx('hit', b.x, b.y, b.col);
+      this.fx('hit', b.x, b.y, b.col, Math.round(b.dmg), own);
       if (!b.pierce) { alive = false; return true; }
       return false;
     };
     this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 8 : 6) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
     if (alive && own >= 0) {
-      if (this.boss) tryHit(this.boss, 4, 26);
-      if (alive && this.fish) tryHit(this.fish, 5, 30);
+      if (this.boss) tryHit(this.boss, 4, 38);
+      if (alive && this.fish) tryHit(this.fish, 5, 42);
     }
     return alive;
   }
@@ -544,6 +544,10 @@ class Game {
         const b = map.bnd; if (b) { k.x = clamp(k.x, b.x0 + 8, b.x1 - 8); k.y = clamp(k.y, b.y0 + 8, b.y1 - 8); }
       }
       let keep = k.t < k.life;
+      if (keep && k.t > .3 && (this.tick + i) % 3 === 0) { // 近くのプレイヤーに吸い寄せ(拾いやすく爽快に)
+        let tg = null; this.grid.each(k.x, k.y, o => { if (o._k === 1 && d2(o.x, o.y, k.x, k.y) < 48 * 48) { tg = o; return true; } });
+        if (tg) { const a = Math.atan2(tg.y - k.y, tg.x - k.x); k.vx = Math.cos(a) * 300; k.vy = Math.sin(a) * 300; }
+      }
       if (keep && k.t > .35) {
         let got = null;
         this.grid.each(k.x, k.y, o => { if (o._k === 1 && d2(o.x, o.y, k.x, k.y) < 13 * 13) { got = o; return true; } });

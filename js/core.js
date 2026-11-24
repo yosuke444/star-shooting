@@ -3,7 +3,8 @@
 //  STAR SHOOTING - core (定数 / ユーティリティ / 入力 / 音 / スプライト)
 // ============================================================
 const W = 960, H = 540;          // メインキャンバス(固定解像度)
-const LW = 480, LH = 270;        // ワールド描画用 低解像度バッファ (x2 で拡大)
+const LW = 400, LH = 225;        // ワールド描画用 低解像度バッファ (x2.4 で拡大 = 少しズーム)
+const SCALE = W / LW;
 const TAU = Math.PI * 2;
 const TILE = 16;
 
@@ -66,8 +67,13 @@ const Sound = {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     try {
       const C = window.AudioContext || window.webkitAudioContext; this.ctx = new C();
-      this.master = this.ctx.createGain(); this.master.connect(this.ctx.destination);
+      // 迫力用: コンプレッサーで音圧を上げ、爆発系は歪み(クランチ)を通す
+      this.comp = this.ctx.createDynamicsCompressor(); this.comp.threshold.value = -20; this.comp.ratio.value = 5; this.comp.attack.value = .002; this.comp.release.value = .15;
+      this.comp.connect(this.ctx.destination);
+      this.master = this.ctx.createGain(); this.master.connect(this.comp);
       this.sfxG = this.ctx.createGain(); this.sfxG.connect(this.master);
+      this.crunch = this.ctx.createWaveShaper(); { const k = 18, n2 = 1024, cv = new Float32Array(n2); for (let i = 0; i < n2; i++) { const x = i / n2 * 2 - 1; cv[i] = (1 + k) * x / (1 + k * Math.abs(x)); } this.crunch.curve = cv; }
+      this.crunch.connect(this.sfxG);
       this.bgmG = this.ctx.createGain(); this.bgmG.connect(this.master);
       const n = this.ctx.sampleRate; const buf = this.ctx.createBuffer(1, n, n); const d = buf.getChannelData(0);
       for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
@@ -75,7 +81,7 @@ const Sound = {
       if (this.pendingBgm) { const p = this.pendingBgm; this.pendingBgm = null; Music.play(p); }
     } catch (e) { this.ctx = null; }
   },
-  applyVol() { if (!this.ctx) return; this.master.gain.value = this.muted ? 0 : 1; this.sfxG.gain.value = this.vol.sfx * 0.5; this.bgmG.gain.value = this.vol.bgm * 0.32; },
+  applyVol() { if (!this.ctx) return; this.master.gain.value = this.muted ? 0 : 1; this.sfxG.gain.value = this.vol.sfx * 0.95; this.bgmG.gain.value = this.vol.bgm * 0.32; },
   toggleMute() { this.muted = !this.muted; this.applyVol(); },
   tone(f, dur, type = 'square', v = 0.3, slide = 0, delay = 0, dest) {
     const c = this.ctx, t = c.currentTime + delay; const o = c.createOscillator(), g = c.createGain();
@@ -89,6 +95,12 @@ const Sound = {
     const g = c.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     s.connect(f); f.connect(g); g.connect(dest || this.sfxG); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
   },
+  // 連続取得の音: 音階が上がっていく「ぎゅいん」
+  combo(n) {
+    if (!this.ctx || this.muted) return;
+    const sc = [0, 2, 4, 5, 7, 9, 11], k = Math.min(n, 27), semi = 12 * Math.floor(k / 7) + sc[k % 7], f = 523 * Math.pow(2, semi / 12);
+    this.tone(f * .7, 0.09, 'square', 0.16, 1.45); this.tone(f, 0.16, 'square', 0.12, 1.02, 0.05); this.tone(f * 2, 0.2, 'triangle', 0.14, 1, 0.05); this.tone(f * 3, 0.12, 'sine', 0.06, 1, 0.08);
+  },
   play(name, vol = 1) {
     if (!this.ctx || this.muted || vol < 0.03) return;
     const now = performance.now(); const gap = SFX_GAP[name] || 40;
@@ -96,15 +108,16 @@ const Sound = {
     const f = SFX[name]; if (f) f(this, Math.min(1, vol));
   },
 };
-const SFX_GAP = { shot: 70, hit: 50, pick: 45, boom: 60 };
+const SFX_GAP = { shot: 55, hit: 40, pick: 45, boom: 50 };
 const SFX = {
-  shot: (s, v) => s.tone(880 + Math.random() * 200, 0.06, 'square', 0.06 * v, 0.5),
-  shotB: (s, v) => s.tone(220, 0.12, 'sawtooth', 0.08 * v, 0.4),
-  hit: (s, v) => { s.noise(0.06, 0.15 * v, 3000); s.tone(300, 0.05, 'square', 0.06 * v, 0.5); },
-  hurt: (s, v) => { s.tone(160, 0.15, 'square', 0.2 * v, 0.4); s.noise(0.12, 0.2 * v, 1500); },
-  boom: (s, v) => { s.noise(0.45, 0.4 * v, 900); s.tone(90, 0.35, 'triangle', 0.3 * v, 0.3); },
-  bigboom: (s, v) => { s.noise(1.2, 0.6 * v, 700); s.tone(60, 1.0, 'sawtooth', 0.3 * v, 0.3); s.tone(45, 1.2, 'triangle', 0.4 * v, 0.5); },
-  pick: (s, v) => { s.tone(990, 0.06, 'square', 0.1 * v, 1.5); s.tone(1480, 0.08, 'square', 0.08 * v, 1, 0.05); },
+  shot: (s, v) => { s.tone(1100 + Math.random() * 300, 0.07, 'square', 0.11 * v, 0.35); s.noise(0.04, 0.12 * v, 6000); },
+  shotB: (s, v) => { s.tone(260, 0.16, 'sawtooth', 0.16 * v, 0.3, 0, s.crunch); s.noise(0.1, 0.2 * v, 1800); },
+  hit: (s, v) => { s.noise(0.08, 0.3 * v, 5000); s.tone(420, 0.07, 'square', 0.12 * v, 0.4, 0, s.crunch); },
+  hurt: (s, v) => { s.tone(180, 0.22, 'sawtooth', 0.35 * v, 0.3, 0, s.crunch); s.noise(0.2, 0.4 * v, 2000); },
+  boom: (s, v) => { s.noise(0.7, 0.7 * v, 1400); s.tone(110, 0.5, 'sine', 0.7 * v, 0.25); s.tone(70, 0.4, 'sawtooth', 0.35 * v, 0.4, 0, s.crunch); },
+  bigboom: (s, v) => { s.noise(1.6, 0.9 * v, 1100); s.tone(80, 1.3, 'sine', 0.9 * v, 0.25); s.tone(50, 1.2, 'sawtooth', 0.5 * v, 0.4, 0, s.crunch); s.noise(0.5, 0.6 * v, 6000, 0.05); },
+  pick: (s, v) => { s.tone(990, 0.06, 'square', 0.14 * v, 1.5); s.tone(1480, 0.08, 'square', 0.12 * v, 1, 0.05); },
+  whoosh: (s, v) => { s.noise(0.35, 0.35 * v, 3000, 0, 3); s.tone(300, 0.3, 'sawtooth', 0.08 * v, 3); },
   item: (s, v) => { [660, 880, 1320].forEach((f, i) => s.tone(f, 0.1, 'square', 0.1 * v, 1, i * 0.06)); },
   chest: (s, v) => { [523, 659, 784, 1047, 1319].forEach((f, i) => s.tone(f, 0.12, 'square', 0.1 * v, 1, i * 0.05)); },
   ride: (s, v) => { s.tone(200, 0.3, 'sawtooth', 0.15 * v, 4); s.tone(600, 0.2, 'square', 0.1 * v, 2, 0.15); },
@@ -116,7 +129,7 @@ const SFX = {
   slash: (s, v) => { s.noise(0.2, 0.3 * v, 5000, 0, 4); s.tone(1200, 0.15, 'sawtooth', 0.08 * v, 0.3); },
   charge: (s, v) => s.tone(200, 0.3, 'sine', 0.1 * v, 3),
   laser: (s, v) => { s.tone(1500, 0.8, 'sawtooth', 0.2 * v, 0.1); s.noise(0.8, 0.4 * v, 4000); },
-  kill: (s, v) => { [523, 784, 1047].forEach((f, i) => s.tone(f, 0.1, 'square', 0.12 * v, 1, i * 0.05)); },
+  kill: (s, v) => { [523, 784, 1047, 1568].forEach((f, i) => { s.tone(f, 0.14, 'square', 0.18 * v, 1, i * 0.05); s.tone(f / 2, 0.14, 'sawtooth', 0.1 * v, 1, i * 0.05); }); s.noise(0.4, 0.4 * v, 4000); },
   move: (s, v) => s.tone(600, 0.04, 'square', 0.08 * v),
   ok: (s, v) => { s.tone(880, 0.06, 'square', 0.1 * v); s.tone(1320, 0.08, 'square', 0.1 * v, 1, 0.05); },
   back: (s, v) => s.tone(440, 0.08, 'square', 0.1 * v, 0.6),

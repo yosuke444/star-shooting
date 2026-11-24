@@ -21,8 +21,8 @@ function wrapText(ctx, s, maxW, size) {
 
 const UI = {
   banners: [], feed: [], floats: [], prevEvt: null, prevPhase: null, sparks: [],
-  reset() { this.banners = []; this.feed = []; this.floats = []; this.prevEvt = null; this.prevPhase = null; this.sparks = []; this.lastRou = -1; },
-  banner(txt, sub, col, big = true, life = 3) { this.banners = this.banners.filter(b => b.big !== big); this.banners.push({ txt, sub, col, big, t: 0, life }); if (big) for (let i = 0; i < 30; i++) this.sparks.push({ x: W / 2 + rnd(-300, 300), y: 160 + rnd(-40, 40), vx: rnd(-200, 200), vy: rnd(-160, 60), t: 0, life: rnd(.6, 1.4), col: pick(['#fff', '#ffe14d', col]) }); },
+  reset() { this.popQ = []; this.pops = []; this.dmgs = []; this.killPop = null; this.combo = 0; this.banners = []; this.feed = []; this.floats = []; this.prevEvt = null; this.prevPhase = null; this.sparks = []; this.lastRou = -1; },
+  banner(txt, sub, col, big = true, life = 3) { this.banners = []; this.banners.push({ txt, sub, col, big, t: 0, life }); for (let i = 0; i < (big ? 120 : 30); i++) { const a = Math.random() * TAU, s = rnd(100, big ? 600 : 300); this.sparks.push({ x: W / 2 + rnd(-200, 200), y: (big ? 150 : 125) + rnd(-30, 30), vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, t: 0, life: rnd(.6, 1.6), col: pick(['#fff', '#ffe14d', col, col]), s: rnd(3, 7) }); } },
   addFeed(s, col = '#fff', mine = false) { this.feed.unshift({ s, col, t: 0, mine }); if (this.feed.length > 6) this.feed.pop(); },
   name(V, id) { const p = V.players[id]; return p ? p.name : '???'; },
 
@@ -48,7 +48,7 @@ const UI = {
         const [, k, v] = a; const mine = k === me || v === me;
         if (k >= 0) this.addFeed(this.name(V, k) + ' ▶ ' + this.name(V, v), PLAYER_COLS[V.players[k]?.col ?? 0], mine);
         else this.addFeed(this.name(V, v) + ' が力尽きた', '#aaa', mine);
-        if (k === me) Sound.play('kill', 1);
+        if (k === me) { Sound.play('kill', 1); this.killPop = { t: 0, name: this.name(V, v) }; FX.stop(.12); FX.kick(.12); }
         break;
       }
       case 'legend': this.banner(this.name(V, a[1]) + ' が ' + MACHINES[a[2]].name + ' に!', 'LEGENDARY MACHINE', MACHINES[a[2]].col, true, 3.2); break;
@@ -60,8 +60,20 @@ const UI = {
       case 'winner': this.banner(this.name(V, a[1]) + ' の優勝!', 'WINNER', '#ffe14d', true, 2.6); Sound.play('win', 1); break;
     }
   },
-  addNotes(notes) { for (const [s, col] of notes) { this.floats.push({ s, col, t: 0 }); if (this.floats.length > 6) this.floats.shift(); } },
+  addNotes(notes) { for (const [s, col, ic] of notes) { if (ic) { this.popQ.push({ s, col, ic }); continue; } this.floats.push({ s, col, t: 0 }); if (this.floats.length > 6) this.floats.shift(); } },
+  // 取得ポップ(連続で取ると音階が上がる)
+  popQ: [], pops: [], combo: 0, comboT: 0, popT: 0, dmgs: [], killPop: null,
+  dmgNum(x, y, v, col, big) { this.dmgs.push({ x: x + rnd(-6, 6), y, v: Math.round(v), col, big, t: 0 }); if (this.dmgs.length > 40) this.dmgs.shift(); },
+  popIcon(V, ic) { const c = ic[0], r = ic.slice(1); if (c === 's') return GFX.patchBig[+r]; if (c === 'k') return GFX.key; if (c === 'p') return partImg(V, +r); return GFX.itemUI[r] || GFX.itemUI.tv; },
   update(dt) {
+    this.popT -= dt; this.comboT -= dt;
+    if (this.popQ.length && this.popT <= 0) {
+      const p = this.popQ.shift(); this.combo = this.comboT > 0 ? this.combo + 1 : 0; this.comboT = .9; p.t = 0; p.n = this.combo; this.pops.push(p); if (this.pops.length > 5) this.pops.shift();
+      Sound.combo(this.combo); this.popT = .065;
+    }
+    for (const p of this.pops) p.t += dt; this.pops = this.pops.filter(p => p.t < 1);
+    for (const d of this.dmgs) d.t += dt; this.dmgs = this.dmgs.filter(d => d.t < .8);
+    if (this.killPop) { this.killPop.t += dt; if (this.killPop.t > 1.4) this.killPop = null; }
     for (const b of this.banners) b.t += dt; this.banners = this.banners.filter(b => b.t < b.life);
     for (const f of this.feed) f.t += dt; this.feed = this.feed.filter(f => f.t < 7);
     for (const f of this.floats) f.t += dt; this.floats = this.floats.filter(f => f.t < 1.8);
@@ -73,20 +85,25 @@ const UI = {
     const me = V.players[Render.meId];
     if (V.phase === 'roulette') { this.drawRoulette(ctx, V, time); this.drawBanners(ctx, time); return; }
     if (V.phase === 'result') { this.drawResult(ctx, V, time); return; }
+    this.drawSpeedLines(ctx, V, time);
     this.drawTags(ctx, V, time);
     this.drawMarkers(ctx, V, time);
+    this.drawDmgs(ctx);
     this.drawFloats(ctx, V);
+    this.drawPops(ctx, V, time);
     // 画面フラッシュ / 被弾
     if (FX.hurt > 0) { const g = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 560); g.addColorStop(0, 'rgba(255,0,0,0)'); g.addColorStop(1, `rgba(255,30,30,${FX.hurt})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
     this.drawEdgeGlow(ctx, time);
     if (FX.flash > 0) { ctx.globalAlpha = Math.min(.6, FX.flash); ctx.fillStyle = FX.flashCol; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
-    this.drawTopLeft(ctx, V, time);
-    this.drawMinimap(ctx, V, time);
-    this.drawEventPanel(ctx, V, time);
+    // HUD は全体的に大きく(角を基準に拡大)
+    const S = (ax, ay, s, fn) => { ctx.save(); ctx.translate(ax, ay); ctx.scale(s, s); ctx.translate(-ax, -ay); fn(); ctx.restore(); };
+    S(0, 0, 1.3, () => this.drawTopLeft(ctx, V, time));
+    S(W, 0, 1.2, () => { this.drawMinimap(ctx, V, time); this.drawEventPanel(ctx, V, time); });
     this.drawBossBar(ctx, V, time);
-    if (me) { this.drawMachinePanel(ctx, V, me, time); this.drawItems(ctx, V, me, time); this.drawTV(ctx, V, me); }
-    this.drawFeed(ctx);
+    if (me) { S(0, H, 1.3, () => this.drawMachinePanel(ctx, V, me, time)); S(W, H, 1.3, () => this.drawItems(ctx, V, me, time)); S(0, 0, 1.2, () => this.drawTV(ctx, V, me)); }
+    S(0, 0, 1.2, () => this.drawFeed(ctx));
     this.drawCenter(ctx, V, me, time);
+    this.drawKillPop(ctx, time);
     this.drawBanners(ctx, time);
   },
   // イベント発生時、画面のふちをイベント色で光らせる(中央は邪魔しない)
@@ -99,6 +116,49 @@ const UI = {
     ctx.fillStyle = grad(0, 0, e, 0); ctx.fillRect(0, 0, e, H); ctx.fillStyle = grad(W, 0, W - e, 0); ctx.fillRect(W - e, 0, e, H);
   },
 
+  // スピード線(疾走感)
+  drawSpeedLines(ctx, V, time) {
+    const me = V.players[Render.meId]; if (!me || me.out || me.dead > 0) return;
+    const sp = Math.hypot(me.vx || 0, me.vy || 0); if (sp < 120) return;
+    const a = Math.atan2(me.vy, me.vx), k = Math.min(1, (sp - 120) / 200), n = 10 + Math.floor(k * 22);
+    ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    for (let i = 0; i < n; i++) {
+      const side = Math.random() * TAU, rr = rnd(260, 560), x = W / 2 + Math.cos(side) * rr, y = H / 2 + Math.sin(side) * rr * .6, L = rnd(40, 130) * (.5 + k);
+      ctx.globalAlpha = rnd(.08, .3) * (.4 + k); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.cos(a) * L, y - Math.sin(a) * L); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  drawDmgs(ctx) {
+    for (const d of this.dmgs) {
+      const k = d.t / .8, x = Render.sx(d.x), y = Render.sy(d.y) - 20 - k * 40, s = d.t < .1 ? 1 + (.1 - d.t) * 8 : 1;
+      ctx.globalAlpha = k > .6 ? (1 - k) / .4 : 1; ctx.save(); ctx.translate(x, y); ctx.scale(s, s); txt(ctx, '' + d.v, 0, 0, d.big ? 30 : 20, d.col, 'center', 5); ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  },
+  drawPops(ctx, V, time) {
+    const n = this.pops.length; if (!n) return;
+    this.pops.forEach((p, i) => {
+      const newest = i === n - 1, age = n - 1 - i, k = p.t;
+      const pop = k < .12 ? .4 + k / .12 * .9 : k < .22 ? 1.3 - (k - .12) * 3 : 1; // ぼよん
+      const s = (newest ? 1 : .62 - age * .06) * pop, y = H / 2 - 120 - age * 46 - k * 14, x = W / 2;
+      ctx.globalAlpha = k > .75 ? (1 - k) / .25 : 1;
+      ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+      if (newest) { ctx.globalAlpha *= .5; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(-110, 0, 40 + Math.sin(time * 20) * 4, 0, TAU); ctx.fill(); ctx.globalAlpha = k > .75 ? (1 - k) / .25 : 1; }
+      const img = this.popIcon(V, p.ic), sc = 5; ctx.drawImage(img, -110 - img.width * sc / 2, -img.height * sc / 2, img.width * sc, img.height * sc);
+      txt(ctx, p.s, -70, 0, 34, p.col, 'left', 7);
+      if (p.n >= 1) { ctx.font = `34px ${FONT}`; const tw = ctx.measureText(p.s).width; txt(ctx, '×' + (p.n + 1), -70 + tw + 36, -4, 26 + Math.min(20, p.n * 2), p.n >= 8 ? PAL[RAINBOW[Math.floor(time * 20) % 8]] : '#ffe14d', 'center', 5); }
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
+  },
+  drawKillPop(ctx, time) {
+    const K = this.killPop; if (!K) return;
+    const t = K.t, s = t < .15 ? 2.6 - t / .15 * 1.6 : 1; ctx.globalAlpha = t > 1.1 ? (1.4 - t) / .3 : 1;
+    ctx.save(); ctx.translate(W / 2, H / 2 + 70); ctx.rotate(-.06); ctx.scale(s, s);
+    txt(ctx, '撃破!!', 0, 0, 64, '#ff4d6d', 'center', 10); txt(ctx, K.name, 0, 46, 22, '#ffffff', 'center', 5);
+    ctx.restore(); ctx.globalAlpha = 1;
+  },
+
   drawTags(ctx, V, time) {
     const me = V.players[Render.meId];
     for (const p of V.players) {
@@ -106,8 +166,8 @@ const UI = {
       const x = Render.sx(p.x), y = Render.sy(p.y) - 34 * Render.cam.zoom;
       if (p.dead > 0) { if (V.phase === 'train') txt(ctx, Math.ceil(p.dead) + '', x, y + 20, 16, '#aaa', 'center', 3); continue; }
       if (p.id === Render.meId) { const b = Math.sin(time * 6) * 3; ctx.fillStyle = '#ffe14d'; ctx.beginPath(); ctx.moveTo(x - 7, y - 6 + b); ctx.lineTo(x + 7, y - 6 + b); ctx.lineTo(x, y + 3 + b); ctx.fill(); ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = 2; ctx.stroke(); continue; }
-      txt(ctx, p.name, x, y - 6, 13, PLAYER_COLS[p.col], 'center', 3);
-      const bw = 34; ctx.fillStyle = '#0b0b18'; ctx.fillRect(x - bw / 2 - 1, y + 2, bw + 2, 5); ctx.fillStyle = p.hp > 50 ? '#5fe36a' : p.hp > 25 ? '#ffd23f' : '#ff4d4d'; ctx.fillRect(x - bw / 2, y + 3, bw * clamp(p.hp / 100, 0, 1), 3);
+      txt(ctx, p.name, x, y - 8, 16, PLAYER_COLS[p.col], 'center', 4);
+      const bw = 44; ctx.fillStyle = '#0b0b18'; ctx.fillRect(x - bw / 2 - 1, y + 2, bw + 2, 6); ctx.fillStyle = p.hp > 50 ? '#5fe36a' : p.hp > 25 ? '#ffd23f' : '#ff4d4d'; ctx.fillRect(x - bw / 2, y + 3, bw * clamp(p.hp / 100, 0, 1), 4);
     }
     // 乗り換えガイド
     if (me && !me.out && me.dead <= 0 && V.phase === 'train') {
@@ -145,7 +205,7 @@ const UI = {
       const cx = W / 2, cy = H / 2, dx = sx - cx, dy = sy - cy, a = Math.atan2(dy, dx);
       const k = Math.min((W / 2 - inset) / Math.abs(dx || 1e-6), (H / 2 - inset) / Math.abs(dy || 1e-6));
       const ax = cx + dx * k, ay = cy + dy * k;
-      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pulse * (i ? .75 : 1), pulse * (i ? .75 : 1));
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pulse * (i ? 1 : 1.4), pulse * (i ? 1 : 1.4));
       ctx.fillStyle = D.col; ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-8, -16); ctx.lineTo(-2, 0); ctx.lineTo(-8, 16); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
       if (!i) { const dist = Math.round(Math.sqrt(d2(m[0], m[1], cam.x, cam.y)) / 10); txt(ctx, dist + 'm', ax - Math.cos(a) * 30, ay - Math.sin(a) * 30, 13, D.col, 'center', 3); }
@@ -154,7 +214,7 @@ const UI = {
   drawFloats(ctx, V) {
     const me = V.players[Render.meId]; if (!me) return;
     const x = Render.sx(me.x), y = Render.sy(me.y) - 50;
-    this.floats.forEach((f, i) => { const k = f.t / 1.8; ctx.globalAlpha = k > .7 ? (1 - k) / .3 : 1; txt(ctx, f.s, x, y - (this.floats.length - 1 - i) * 18 - f.t * 18, 15, f.col, 'center', 4); });
+    this.floats.forEach((f, i) => { const k = f.t / 1.8; ctx.globalAlpha = k > .7 ? (1 - k) / .3 : 1; txt(ctx, f.s, x, y - (this.floats.length - 1 - i) * 24 - f.t * 22, 20, f.col, 'center', 5); });
     ctx.globalAlpha = 1;
   },
 
@@ -273,15 +333,15 @@ const UI = {
       if (me.buf && ((i === 0 && me.buf.dumb > 0) || (i === 1 && me.buf.jet > 0) || (i === 3 && me.buf.glass > 0))) { ctx.strokeStyle = STAT_COL[i]; ctx.lineWidth = 2; ctx.strokeRect(sx + 1, sy + 1, 74, 36); }
     }
     // パーツ
-    let px = x + w + 8;
+    let px = x;
     for (let k = 0; k < 3; k++) {
       if (!me.parts[k] || !V.legendOrder) continue;
-      const L = MACHINES[V.legendOrder[k]]; panel(ctx, px, y + 70, 150, 52, 'rgba(12,12,36,.82)', L.col);
-      txt(ctx, L.name + 'のパーツ', px + 8, y + 84, 12, L.col, 'left', 3);
-      for (let i = 0; i < 3; i++) { ctx.globalAlpha = i < me.parts[k] ? 1 : .25; icon(ctx, partImg(V, k), px + 8 + i * 30, y + 94, 2); }
+      const L = MACHINES[V.legendOrder[k]]; panel(ctx, px, y - 58, 150, 52, 'rgba(12,12,36,.82)', L.col);
+      txt(ctx, L.name + 'のパーツ', px + 8, y - 44, 12, L.col, 'left', 3);
+      for (let i = 0; i < 3; i++) { ctx.globalAlpha = i < me.parts[k] ? 1 : .25; icon(ctx, partImg(V, k), px + 8 + i * 30, y - 34, 2); }
       ctx.globalAlpha = 1; px += 158;
     }
-    if (me.key) { panel(ctx, px, y + 70, 96, 50, 'rgba(12,12,36,.82)', '#ffe14d'); icon(ctx, GFX.key, px + 10, y + 86, 3); txt(ctx, '鍵', px + 62, y + 95, 16, '#ffe14d', 'center', 3); }
+    if (me.key) { panel(ctx, px, y - 58, 96, 52, 'rgba(12,12,36,.82)', '#ffe14d'); icon(ctx, GFX.key, px + 10, y - 42, 3); txt(ctx, '鍵', px + 62, y - 33, 16, '#ffe14d', 'center', 3); }
   },
   drawItems(ctx, V, me, time) {
     const items = me.items || [], x0 = W - 190, y0 = H - 110;
@@ -302,7 +362,7 @@ const UI = {
   },
   drawTV(ctx, V, me) {
     if (!me.tv || !V.evtList) return;
-    const x = 10, y = 250, w = 200, L = V.evtList;
+    const x = 10, y = 262, w = 200, L = V.evtList;
     panel(ctx, x, y, w, 30 + L.length * 20, 'rgba(12,12,36,.8)', RAR_COL.SR);
     txt(ctx, '番組表', x + 10, y + 14, 14, RAR_COL.SR, 'left', 3);
     L.forEach((t, i) => { const done = i < (V.evtIdx || 0) - (V.evt.cur ? 1 : 0), cur = V.evt.cur && i === V.evtIdx - 1; txt(ctx, (cur ? '▶ ' : done ? '✓ ' : (i + 1) + '. ') + EVENT_DEFS[t].short, x + 12, y + 36 + i * 20, 13, cur ? EVENT_DEFS[t].col : done ? '#666' : '#fff', 'left', 0); });
@@ -337,10 +397,10 @@ const UI = {
     if (V.zone && V.phase === 'battle' && !me.out && d2(me.x, me.y, V.zone.x, V.zone.y) > V.zone.r ** 2 && Math.floor(time * 4) % 2) txt(ctx, '安全地帯の外! ダメージを受けている!', W / 2, 110, 20, '#ff7ad9', 'center', 4);
   },
   drawBanners(ctx, time) {
-    for (const s of this.sparks) { ctx.globalAlpha = 1 - s.t / s.life; ctx.fillStyle = s.col; ctx.fillRect(s.x - 2, s.y - 2, 4, 4); } ctx.globalAlpha = 1;
+    for (const s of this.sparks) { ctx.globalAlpha = 1 - s.t / s.life; const z = s.s || 4; ctx.fillStyle = s.col; ctx.fillRect(s.x - z / 2, s.y - z / 2, z, z); } ctx.globalAlpha = 1;
     for (const b of this.banners) {
       const t = b.t, L = b.life, inK = Math.min(1, t / .25), outK = t > L - .4 ? (L - t) / .4 : 1;
-      const y = b.big ? 160 : 92, h = b.big ? 84 : 46;
+      const y = b.big ? 150 : 125, h = b.big ? 112 : 60;
       ctx.save(); ctx.globalAlpha = Math.max(0, outK) * .95;
       // リボン
       const rw = W * inK; ctx.fillStyle = 'rgba(10,10,30,.75)'; ctx.fillRect(W / 2 - rw / 2, y - h / 2, rw, h);
@@ -350,8 +410,9 @@ const UI = {
       const slide = (1 - Math.min(1, t / .35)); const tx = W / 2 + slide * 400 - (t > L - .4 ? (1 - outK) * 300 : 0);
       const sc = b.big ? 1 + Math.max(0, .2 - t) * 2 : 1;
       ctx.translate(tx, y); ctx.scale(sc, sc);
-      if (b.sub) txt(ctx, b.sub, 0, b.big ? -26 : -12, b.big ? 15 : 11, b.col, 'center', 3);
-      txt(ctx, b.txt, 0, b.big ? 10 : 6, b.big ? 40 : 22, '#ffffff', 'center', 6, b.big ? '#0b0b18' : '#0b0b18');
+      if (b.sub) txt(ctx, b.sub, 0, b.big ? -36 : -16, b.big ? 20 : 14, b.col, 'center', 4);
+      if (b.big && t < .5) { ctx.globalAlpha *= (.5 - t) * 2; txt(ctx, b.txt, 0, 12, 58 * (1 + t * 1.5), b.col, 'center', 0); ctx.globalAlpha = Math.max(0, outK) * .95; }
+      txt(ctx, b.txt, 0, b.big ? 12 : 8, b.big ? 58 : 30, '#ffffff', 'center', 8, '#0b0b18');
       ctx.restore();
     }
   },

@@ -248,9 +248,9 @@ class ClientView {
     p.pred = true;
     const frozen = this.phase === 'battle' && this.count > 0; const m = frozen ? 0 : mask;
     const dir = maskDir(m), z = (m & IN.Z) !== 0;
-    if (dir !== null) p.a += clamp(angDiff(p.a, dir), -9 * dt, 9 * dt);
-    const maxS = Math.min(380, 80 * this.ss); let tgt = 0; if (z) tgt = maxS; else if (dir !== null) tgt = maxS * .62;
-    const kk = Math.min(1, dt * (tgt > 0 ? 5 : 3));
+    if (dir !== null) p.a += clamp(angDiff(p.a, dir), -12 * dt, 12 * dt);
+    const maxS = Math.min(460, 108 * this.ss); let tgt = 0; if (z) tgt = maxS; else if (dir !== null) tgt = maxS * .62;
+    const kk = Math.min(1, dt * (tgt > 0 ? 7 : 3.5));
     p.vx += (Math.cos(p.a) * tgt - p.vx) * kk; p.vy += (Math.sin(p.a) * tgt - p.vy) * kk;
     this.map.move(p, p.vx * dt, p.vy * dt, MACHINES[p.m].big ? 8 : 6);
     // サーバー位置へ徐々に寄せる

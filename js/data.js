@@ -54,6 +54,10 @@ const MACHINES = [
   { name: 'リヴァイアサン', tpl: 'levia', col: '#2e7bff', acc: '#9ae8ff', mul: [1.55, .95, .95, 1.75], shot: 'levia', legend: 1, desc: '伝説・超射程水流' },
   { name: 'ケルベロス', tpl: 'cerb', col: '#6a3dbf', acc: '#ff4d4d', mul: [1.25, 1.05, 1.8, 1.1], shot: 'cerb', legend: 1, big: 1, desc: '伝説・鉄壁3連砲' },
 ];
+// 性能を尖らせる: 得意はより得意に、苦手はより苦手に(ミニノーマルは全部苦手のまま)
+MACHINES.forEach((M, i) => { M.mul = M.mul.map(v => i === 0 ? .75 : clamp(+(1 + (v - 1) * 1.9).toFixed(2), .35, 2.6)); M.best = M.mul.indexOf(Math.max(...M.mul)); });
+// ゲームスピードアップ: 弾速 x1.3 / 連射 x0.85 (射程はやや伸びる)
+for (const k in SHOTS) { const S = SHOTS[k]; S.spd *= 1.3; S.life *= .88; S.rate *= .85; }
 const LEGEND_IDS = [12, 13, 14];
 const NORMAL_SPAWN = [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11];
 
@@ -85,13 +89,14 @@ const isPart = k => k >= PK_PART && k < PK_PART + 3;
 const partsN = p => p.parts[0] + p.parts[1] + p.parts[2];
 
 // ---- 雑魚敵 ----
-const ENEMIES = [
+const ENEMIES_BASE = [
   { name: 'ツノスライム', spr: 'slime', hp: 22, spd: 34, drop: 0, r: 6, touch: 4, beh: 'hop' },
   { name: 'ハヤブサ', spr: 'bird', hp: 14, spd: 70, drop: 1, r: 6, touch: 3, beh: 'fly' },
   { name: 'カメタンク', spr: 'turtle', hp: 46, spd: 18, drop: 2, r: 7, touch: 5, beh: 'walk' },
   { name: 'メダマン', spr: 'eye', hp: 18, spd: 28, drop: 3, r: 6, touch: 3, beh: 'shoot' },
   { name: 'スピードラビット', spr: 'rabbit', hp: 12, spd: 120, drop: -1, r: 6, touch: 3, beh: 'flee' },
 ];
+const ENEMIES = ENEMIES_BASE.map(e => Object.assign({}, e, { spd: e.spd * 1.35 }));
 
 // ============================================================
 //  スプライト
@@ -133,6 +138,11 @@ const ICON_SYM = {
   part: ['...w...', '..www..', 'wwwwwww', '.wwwww.', '..www..', '.ww.ww.', 'w.....w'],
 };
 
+function outlined(src, col) {
+  const c = mkCanvas(src.width + 4, src.height + 4), x = c.getContext('2d'), sil = silhouette(src, col);
+  for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-1, -1], [1, -1], [-1, 1], [1, 1], [-2, -1], [2, 1], [-1, 2], [1, -2]]) x.drawImage(sil, 2 + dx, 2 + dy);
+  x.drawImage(src, 2, 2); return c;
+}
 function buildMachineSprite(mi) {
   const M = MACHINES[mi], t = MTPL[M.tpl];
   const pal = { b: M.col, h: shade(M.col, .45), d: shade(M.col, -.45), c: '#bff6ff', a: M.acc, e: '#ff9b3d', w: '#ffffff' };
@@ -202,6 +212,8 @@ function buildFish() {
 function buildGFX() {
   GFX.machine = MACHINES.map((_, i) => buildMachineSprite(i));
   GFX.machineW = GFX.machine.map(s => silhouette(s));
+  // マップに落ちているマシン: 得意ステータスの色でふちどり(ミニノーマルは白)
+  GFX.machineFree = GFX.machine.map((s, i) => outlined(s, i === 0 ? '#ffffff' : MACHINES[i].legend ? '#ffe14d' : STAT_COL[MACHINES[i].best]));
   GFX.enemy = ENEMIES.map(e => pixArt(ENEMY_ART[e.spr].rows, ENEMY_ART[e.spr].pal));
   GFX.enemyW = GFX.enemy.map(s => silhouette(s));
   GFX.patch = PATCH_SYM.map((s, i) => plateIcon(s, STAT_COL[i], '#fff', 9));

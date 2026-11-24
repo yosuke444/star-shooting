@@ -5,30 +5,36 @@
 // 非固体: 0草 1濃草 2土 3道 4花 5砂 6金属床 7金属床2 8溶岩(ダメージ) 9水晶床 11星床
 // 固体  : 20岩 21木 22金属壁 23水晶 24花壁 25柱 26場外(宇宙)
 const SOLID = 20;
-const TILE_MINI = { 0: '#3f9a3a', 1: '#2f7f30', 2: '#9a7a4a', 3: '#6a6a7a', 4: '#4faa44', 5: '#d8c88a', 6: '#4a5068', 7: '#3e4458', 8: '#ff5a1a', 9: '#5a4a8a', 11: '#6a6a9a', 20: '#7a7a8a', 21: '#1a5a22', 22: '#8a90a8', 23: '#c88aff', 24: '#ff7ad9', 25: '#a0a8c0', 26: '#0a0a1a' };
+const TILE_MINI = { 0: '#0b0b26', 1: '#0e0e2e', 2: '#2e1a52', 3: '#16365a', 4: '#1c1c48', 5: '#123a48', 6: '#4a5068', 7: '#3e4458', 8: '#ff5a1a', 9: '#5a4a8a', 11: '#6a6a9a', 12: '#3a2a30', 20: '#8a7a6a', 21: '#4a5a72', 22: '#8a90a8', 23: '#c88aff', 24: '#ff7ad9', 25: '#a0a8c0', 26: '#05050f' };
 const TILES = {};
 function buildTiles() {
   const mk = (fn, n = 3) => { const out = []; for (let v = 0; v < n; v++) { const c = mkCanvas(16, 16), x = c.getContext('2d'); const r = RNG(v * 977 + 13); fn(x, r, v); out.push(c); } return out; };
   const speck = (x, r, base, cols, n) => { x.fillStyle = base; x.fillRect(0, 0, 16, 16); for (let i = 0; i < n; i++) { x.fillStyle = cols[Math.floor(r() * cols.length)]; x.fillRect(Math.floor(r() * 16), Math.floor(r() * 16), 1, r() < .3 ? 2 : 1); } };
-  TILES[0] = mk((x, r) => speck(x, r, '#3f9a3a', ['#4fb048', '#358a32', '#5cc052'], 14));
-  TILES[1] = mk((x, r) => speck(x, r, '#2f7f30', ['#3a8f38', '#266a27'], 12));
-  TILES[2] = mk((x, r) => speck(x, r, '#9a7a4a', ['#a8895a', '#86683c', '#b8996a'], 16));
-  TILES[3] = mk((x, r, v) => { speck(x, r, '#6a6a7a', ['#74748a', '#5e5e6c'], 10); if (v === 0) { x.fillStyle = '#e8e080'; x.fillRect(6, 7, 4, 2); } });
-  TILES[4] = mk((x, r) => { speck(x, r, '#3f9a3a', ['#4fb048', '#358a32'], 10); const cs = ['#ff7ad9', '#ffe14d', '#ffffff', '#ff4d6d', '#8ad0ff']; for (let i = 0; i < 3; i++) { const a = 2 + Math.floor(r() * 12), b = 2 + Math.floor(r() * 12); x.fillStyle = cs[Math.floor(r() * cs.length)]; x.fillRect(a - 1, b, 3, 1); x.fillRect(a, b - 1, 1, 3); x.fillStyle = '#ffb43d'; x.fillRect(a, b, 1, 1); } });
-  TILES[5] = mk((x, r) => speck(x, r, '#d8c88a', ['#e4d69a', '#c8b878'], 12));
+  // 宇宙テーマ: 0/1/26 は描かない(背景の星空が見える)。2/4/5 は半透明の星雲・星屑
+  TILES[0] = TILES[1] = TILES[26] = null;
+  const dust = (x, r, cols, n, a) => { x.globalAlpha = a; for (let i = 0; i < n; i++) { x.fillStyle = cols[Math.floor(r() * cols.length)]; const s = r() < .3 ? 2 : 1; x.fillRect(Math.floor(r() * 16), Math.floor(r() * 16), s, s); } x.globalAlpha = 1; };
+  TILES[2] = mk((x, r) => { x.fillStyle = 'rgba(120,60,200,.16)'; x.fillRect(0, 0, 16, 16); dust(x, r, ['#c86bff', '#ff7ad9', '#8a5aff'], 10, .5); });
+  TILES[3] = mk((x, r, v) => { x.fillStyle = 'rgba(30,80,150,.22)'; x.fillRect(0, 0, 16, 16); if (v === 0) { x.fillStyle = 'rgba(61,216,255,.55)'; x.fillRect(7, 7, 2, 2); } });
+  TILES[4] = mk((x, r) => { const cs = ['#ffffff', '#fff3b0', '#8ad0ff', '#ffb0e0']; for (let i = 0; i < 2; i++) { const a = 2 + Math.floor(r() * 12), b = 2 + Math.floor(r() * 12); x.fillStyle = cs[Math.floor(r() * cs.length)]; x.fillRect(a - 1, b, 3, 1); x.fillRect(a, b - 1, 1, 3); } dust(x, r, cs, 4, .7); });
+  TILES[5] = mk((x, r) => { x.fillStyle = 'rgba(40,180,200,.13)'; x.fillRect(0, 0, 16, 16); dust(x, r, ['#3dffe0', '#4dc3ff'], 8, .45); });
+  TILES[12] = mk((x, r) => speck(x, r, '#3a2a30', ['#4a3438', '#2a1e22', '#5a3a30'], 14));
   TILES[6] = mk((x, r, v) => { x.fillStyle = '#4a5068'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#565c78'; x.fillRect(1, 1, 14, 1); x.fillStyle = '#383c50'; x.fillRect(0, 15, 16, 1); x.fillRect(15, 0, 1, 16); x.fillStyle = '#6a7090'; x.fillRect(2, 2, 1, 1); x.fillRect(13, 2, 1, 1); x.fillRect(2, 13, 1, 1); x.fillRect(13, 13, 1, 1); });
   TILES[7] = mk((x, r, v) => { x.fillStyle = '#3e4458'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#4a5068'; x.fillRect(1, 1, 14, 1); x.fillStyle = '#2e3244'; x.fillRect(0, 15, 16, 1); x.fillRect(15, 0, 1, 16); });
   TILES[8] = mk((x, r, v) => { speck(x, r, '#e8461a', ['#ff7a2e', '#ffb43d', '#c8321a'], 20); x.fillStyle = '#ffe14d'; x.fillRect(Math.floor(r() * 12), Math.floor(r() * 12), 3, 1); });
   TILES[9] = mk((x, r) => { speck(x, r, '#4a3e7a', ['#5a4a8a', '#3e3468', '#7a6ab0'], 10); });
   TILES[11] = mk((x, r, v) => { x.fillStyle = '#5a5a8a'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#ffe14d'; x.fillRect(7, 3, 2, 10); x.fillRect(3, 7, 10, 2); x.fillStyle = '#fff3b0'; x.fillRect(7, 7, 2, 2); }, 1);
   const block = (top, side, hl, deco) => mk((x, r, v) => { x.fillStyle = side; x.fillRect(0, 0, 16, 16); x.fillStyle = top; x.fillRect(0, 0, 16, 12); x.fillStyle = hl; x.fillRect(0, 0, 16, 1); x.fillRect(0, 0, 1, 12); x.fillStyle = '#0b0b1860'; x.fillRect(0, 15, 16, 1); if (deco) deco(x, r, v); });
-  TILES[20] = block('#8a8a9a', '#5a5a6a', '#b0b0c0', (x, r) => { x.fillStyle = '#6a6a7a'; for (let i = 0; i < 4; i++) x.fillRect(2 + Math.floor(r() * 11), 2 + Math.floor(r() * 8), 2, 1); });
-  TILES[21] = mk((x, r) => { x.fillStyle = '#3f9a3a'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#5a3a1a'; x.fillRect(6, 11, 4, 5); x.fillStyle = '#0b0b18'; x.beginPath(); x.arc(8, 7, 7.5, 0, TAU); x.fill(); x.fillStyle = '#1f6a2a'; x.beginPath(); x.arc(8, 7, 6.5, 0, TAU); x.fill(); x.fillStyle = '#2e8a3a'; x.beginPath(); x.arc(7, 6, 4.5, 0, TAU); x.fill(); x.fillStyle = '#5fc052'; x.fillRect(5, 3, 2, 2); });
+  TILES[20] = mk((x, r) => { // 小惑星
+    x.fillStyle = '#3a2e28'; x.beginPath(); x.arc(8, 9, 7.6, 0, TAU); x.fill(); x.fillStyle = '#7a6a5a'; x.beginPath(); x.arc(8, 8, 7, 0, TAU); x.fill(); x.fillStyle = '#9a8a76'; x.beginPath(); x.arc(6, 6, 4, 0, TAU); x.fill();
+    x.fillStyle = '#5a4a3e'; for (let i = 0; i < 3; i++) { const a = 4 + Math.floor(r() * 8), b = 5 + Math.floor(r() * 7); x.fillRect(a, b, 2, 2); } x.fillStyle = '#c8b8a0'; x.fillRect(4, 4, 2, 1); });
+  TILES[21] = mk((x, r) => { // 氷の小惑星
+    x.fillStyle = '#1a2230'; x.beginPath(); x.moveTo(8, 0); x.lineTo(16, 6); x.lineTo(13, 16); x.lineTo(3, 16); x.lineTo(0, 6); x.closePath(); x.fill();
+    x.fillStyle = '#4a5a72'; x.beginPath(); x.moveTo(8, 1); x.lineTo(15, 6); x.lineTo(12, 15); x.lineTo(4, 15); x.lineTo(1, 6); x.closePath(); x.fill();
+    x.fillStyle = '#7a8aa6'; x.beginPath(); x.moveTo(8, 2); x.lineTo(12, 6); x.lineTo(8, 9); x.lineTo(4, 6); x.closePath(); x.fill(); x.fillStyle = '#a8c8e8'; x.fillRect(7, 3, 1, 1); });
   TILES[22] = block('#8a90a8', '#4a5068', '#c0c8e0', (x) => { x.fillStyle = '#6a7090'; x.fillRect(3, 3, 10, 6); x.fillStyle = '#9aa0c0'; x.fillRect(4, 4, 8, 1); });
   TILES[23] = block('#a06ae0', '#5a3a9a', '#e0c0ff', (x, r) => { x.fillStyle = '#ffffff'; x.fillRect(3 + Math.floor(r() * 8), 2 + Math.floor(r() * 6), 1, 3); x.fillStyle = '#d0a0ff'; x.fillRect(8, 4, 3, 4); });
   TILES[24] = [GFX.flowerWall];
   TILES[25] = block('#c0c8e0', '#6a7090', '#ffffff', (x) => { x.fillStyle = '#ffe14d'; x.fillRect(7, 5, 2, 2); });
-  TILES[26] = mk((x, r) => { x.fillStyle = '#07071a'; x.fillRect(0, 0, 16, 16); if (r() < .5) { x.fillStyle = r() < .5 ? '#ffffff' : '#8a8ac0'; x.fillRect(Math.floor(r() * 16), Math.floor(r() * 16), 1, 1); } }, 4);
 }
 
 class Map2D {
@@ -140,7 +146,7 @@ function arenaRadius(n) { return Math.round(260 + n * 16); }
 function genArena(idx, seed, n) {
   const rng = RNG(seed), R = arenaRadius(n), tw = Math.ceil(R * 2 / TILE) + 6, m = new Map2D(tw, tw);
   const cx = m.w / 2, cy = m.h / 2, Rt = R / TILE, ctile = tw / 2;
-  const floor = [6, 9, 6, 2, 0][idx];
+  const floor = [6, 9, 6, 12, 0][idx];
   for (let ty = 0; ty < tw; ty++) for (let tx = 0; tx < tw; tx++) {
     const dx = tx + .5 - ctile, dy = ty + .5 - ctile, dd = Math.sqrt(dx * dx + dy * dy);
     let t = dd > Rt ? 26 : dd > Rt - 1 ? 22 : floor;
