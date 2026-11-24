@@ -24,6 +24,7 @@ function fit() {
   canvas.style.width = Math.floor(W * s) + 'px'; canvas.style.height = Math.floor(H * s) + 'px';
 }
 addEventListener('resize', fit);
+canvas.addEventListener('pointerdown', () => { window.focus(); Sound.unlock(); });
 
 // ---- 文字入力(名前・ルームコードのみ) ----
 const TextEntry = {

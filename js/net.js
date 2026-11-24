@@ -37,6 +37,7 @@ const Net = {
   // ---------------- ホスト ----------------
   async host(name) {
     this.reset(); this.role = 'host'; this.status = 'シグナリングサーバーに接続中…';
+    if (window.NO_ONLINE) { this.err = 'このページではフレンド戦は使えません(index.html 版で遊んでください)'; this.status = ''; this.emit('error'); return; }
     try { await loadPeerJS(); } catch (e) { this.err = e.message; this.status = ''; this.emit('error'); return; }
     const code = Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
     this.code = code;
@@ -126,6 +127,7 @@ const Net = {
   // ---------------- クライアント ----------------
   async join(code, name) {
     this.reset(); this.role = 'client'; this.status = '接続中…';
+    if (window.NO_ONLINE) { this.err = 'このページではフレンド戦は使えません(index.html 版で遊んでください)'; this.emit('error'); return; }
     try { await loadPeerJS(); } catch (e) { this.err = e.message; this.emit('error'); return; }
     const peer = this.peer = new Peer(Object.assign({ debug: 0 }, window.PEER_OPTS || {}));
     peer.on('error', e => { this.err = e.type === 'peer-unavailable' ? 'ルームが見つかりません(コードを確認してください)' : '接続エラー: ' + e.type; this.emit('error'); });
