@@ -196,8 +196,8 @@ const Render = {
     }
     const col = PLAYER_COLS[p.col];
     // プレイヤーカラーの足元リング
-    w.globalAlpha = .9; w.strokeStyle = col; w.lineWidth = 1; w.beginPath(); w.ellipse(p.x, p.y + 3, big ? 11 : 9, big ? 5 : 4, 0, 0, TAU); w.stroke(); w.globalAlpha = 1;
-    this.shadow(p.x, p.y + 6, big ? 8 : 6, 2.5);
+    w.globalAlpha = .9; w.strokeStyle = col; w.lineWidth = 1; w.beginPath(); w.ellipse(p.x, p.y + 3, big ? 15 : 9, big ? 7 : 4, 0, 0, TAU); w.stroke(); w.globalAlpha = 1;
+    this.shadow(p.x, p.y + (big ? 9 : 6), big ? 12 : 6, big ? 3.5 : 2.5);
     // 排気
     const spd = Math.hypot(p.vx || 0, p.vy || 0);
     if (spd > 50 && Math.random() < .6) { const a = p.a + Math.PI; Particles.add(p.x + Math.cos(a) * 7, p.y + Math.sin(a) * 7, Math.cos(a) * 30 + rnd(-10, 10), Math.sin(a) * 30 + rnd(-10, 10), .3, 2, p.buf && p.buf.jet > 0 ? C_YEL : (M.legend ? RAINBOW[(Math.random() * 8) | 0] : C_ORA), 3); }
@@ -205,7 +205,7 @@ const Render = {
     const blink = p.inv > 0 && Math.floor(time * 15) % 2;
     // 残像(疾走感)
     if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.a, life: .16 });
-    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machine[p.m], p.x, p.y, p.a, false, big ? 1.3 : 1);
+    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machine[p.m], p.x, p.y, p.a, false, big ? 1.65 : 1);
     // バフ
     if (p.buf) {
       if (p.buf.bar > 0) { w.globalAlpha = .35 + Math.sin(time * 10) * .15; w.fillStyle = '#8ad0ff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; w.strokeStyle = '#ffffff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.stroke(); }

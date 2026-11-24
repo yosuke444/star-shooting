@@ -19,6 +19,8 @@ function wrapText(ctx, s, maxW, size) {
   if (line) out.push(line); return out;
 }
 
+// バトルの順位: デスが少ない順 → 撃破が多い順
+function battleRank(V) { return V.players.slice().sort((a, b) => ((a.deaths || 0) - (b.deaths || 0)) || ((b.bk || 0) - (a.bk || 0)) || (a.id - b.id)); }
 const UI = {
   banners: [], feed: [], floats: [], prevEvt: null, prevPhase: null, sparks: [],
   reset() { this.popQ = []; this.pops = []; this.dmgs = []; this.killPop = null; this.combo = 0; this.banners = []; this.feed = []; this.floats = []; this.prevEvt = null; this.prevPhase = null; this.sparks = []; this.lastRou = -1; },
@@ -57,6 +59,7 @@ const UI = {
       case 'key': this.addFeed(this.name(V, a[1]) + ' が鍵をゲット', '#ffe14d', a[1] === me); break;
       case 'unlock': this.addFeed(this.name(V, a[1]) + ' が鍵付き宝箱をオープン!', '#ffe14d', a[1] === me); break;
       case 'arrow': if (a[1] !== me) { this.addFeed('!! ' + this.name(V, a[1]) + ' がビッグアローをチャージ中 !!', '#ff4d4d', false); Sound.play('warn', .8); } break;
+      case 'timeup': this.banner('タイムアップ!', 'TIME UP', '#ff4d6d', true, 2.5); Sound.play('go', 1); break;
       case 'winner': this.banner(this.name(V, a[1]) + ' の優勝!', 'WINNER', '#ffe14d', true, 2.6); Sound.play('win', 1); break;
     }
   },
@@ -98,7 +101,7 @@ const UI = {
     // HUD は全体的に大きく(角を基準に拡大)
     const S = (ax, ay, s, fn) => { ctx.save(); ctx.translate(ax, ay); ctx.scale(s, s); ctx.translate(-ax, -ay); fn(); ctx.restore(); };
     S(0, 0, 1.3, () => this.drawTopLeft(ctx, V, time));
-    S(W, 0, 1.2, () => { this.drawMinimap(ctx, V, time); this.drawEventPanel(ctx, V, time); });
+    S(W, 0, 1.2, () => { this.drawMinimap(ctx, V, time); this.drawEventPanel(ctx, V, time); if (V.phase === 'battle') this.drawBoard(ctx, V, time); });
     this.drawBossBar(ctx, V, time);
     if (me) { S(0, H, 1.3, () => this.drawMachinePanel(ctx, V, me, time)); S(W, H, 1.3, () => this.drawItems(ctx, V, me, time)); S(0, 0, 1.2, () => this.drawTV(ctx, V, me)); }
     S(0, 0, 1.2, () => this.drawFeed(ctx));
@@ -159,6 +162,15 @@ const UI = {
     ctx.restore(); ctx.globalAlpha = 1;
   },
 
+  // バトル中の順位表(デスが少ない順)
+  drawBoard(ctx, V, time) {
+    const R = battleRank(V), me = V.players[Render.meId], x = W - 196, y = 196, w = 186, show = R.slice(0, 4);
+    if (me && !show.includes(me)) show.push(me);
+    panel(ctx, x, y, w, 28 + show.length * 18, 'rgba(12,12,36,.8)', '#ff7ad9');
+    txt(ctx, 'デスが少ない人の勝ち', x + 8, y + 14, 12, '#ff7ad9', 'left', 0);
+    show.forEach((p, i) => { const yy = y + 32 + i * 18, mine = p === me; if (mine) { ctx.fillStyle = 'rgba(255,225,77,.18)'; ctx.fillRect(x + 3, yy - 9, w - 6, 18); } txt(ctx, (R.indexOf(p) + 1) + '. ' + p.name, x + 8, yy, 13, PLAYER_COLS[p.col], 'left', 3); txt(ctx, 'D' + (p.deaths || 0), x + w - 8, yy, 13, '#fff', 'right', 3); });
+  },
+
   drawTags(ctx, V, time) {
     const me = V.players[Render.meId];
     for (const p of V.players) {
@@ -166,7 +178,7 @@ const UI = {
       const x = Render.sx(p.x), y = Render.sy(p.y) - 34 * Render.cam.zoom;
       if (p.dead > 0) { if (V.phase === 'train') txt(ctx, Math.ceil(p.dead) + '', x, y + 20, 16, '#aaa', 'center', 3); continue; }
       if (p.id === Render.meId) { const b = Math.sin(time * 6) * 3; ctx.fillStyle = '#ffe14d'; ctx.beginPath(); ctx.moveTo(x - 7, y - 6 + b); ctx.lineTo(x + 7, y - 6 + b); ctx.lineTo(x, y + 3 + b); ctx.fill(); ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = 2; ctx.stroke(); continue; }
-      txt(ctx, p.name, x, y - 8, 16, PLAYER_COLS[p.col], 'center', 4);
+      txt(ctx, p.name + (V.phase === 'battle' ? '  D' + (p.deaths || 0) : ''), x, y - 8, 16, PLAYER_COLS[p.col], 'center', 4);
       const bw = 44; ctx.fillStyle = '#0b0b18'; ctx.fillRect(x - bw / 2 - 1, y + 2, bw + 2, 6); ctx.fillStyle = p.hp > 50 ? '#5fe36a' : p.hp > 25 ? '#ffd23f' : '#ff4d4d'; ctx.fillRect(x - bw / 2, y + 3, bw * clamp(p.hp / 100, 0, 1), 4);
     }
     // 乗り換えガイド
@@ -228,9 +240,10 @@ const UI = {
       txt(ctx, 'EVENT ' + done + '/' + total, 210, 26, 13, '#ffe14d', 'right');
     } else if (V.phase === 'battle') {
       txt(ctx, 'BATTLE', 22, 26, 14, '#ff7ad9');
-      const alive = V.players.filter(p => !p.out).length;
-      txt(ctx, '残り ' + alive + '人', 22, 56, 30, '#ffffff');
-      txt(ctx, ARENAS[V.arena].name, 210, 26, 12, ARENAS[V.arena].col, 'right');
+      const urgent = V.t < 10 && Math.floor(time * 4) % 2;
+      txt(ctx, fmtTime(V.t), 22, 56, 34, urgent ? '#ff4d4d' : '#ffffff');
+      const me = V.players[Render.meId];
+      if (me) { const rank = battleRank(V).indexOf(me) + 1; txt(ctx, rank + '位', 210, 30, 18, '#ffe14d', 'right', 3); txt(ctx, 'デス ' + (me.deaths || 0), 210, 58, 18, '#ff9b9b', 'right', 3); }
     }
   },
   drawFeed(ctx) {
@@ -374,12 +387,12 @@ const UI = {
       if (n >= 1) { ctx.save(); ctx.translate(W / 2, H / 2 - 40); const s = 1 + (1 - k) * .5; ctx.scale(s, s); txt(ctx, '' + n, 0, 0, 90, '#ffe14d', 'center', 8); ctx.restore(); }
       else txt(ctx, 'GO!', W / 2, H / 2 - 40, 90, '#ff4d6d', 'center', 8);
     } else if (V.phase === 'battle' && V.battleT < 1.2 && V.battleT > 0) { ctx.globalAlpha = 1 - V.battleT / 1.2; txt(ctx, 'GO!', W / 2, H / 2 - 40, 90 + V.battleT * 40, '#ff4d6d', 'center', 8); ctx.globalAlpha = 1; }
-    if (V.phase === 'train' && V.t < 10 && V.t > 0) { const n = Math.ceil(V.t), k = V.t % 1; ctx.globalAlpha = .35 + k * .4; txt(ctx, '' + n, W / 2, 120, 70 + k * 20, '#ff4d6d', 'center', 6); ctx.globalAlpha = 1; }
+    if ((V.phase === 'train' || (V.phase === 'battle' && V.count <= 0)) && V.t < 10 && V.t > 0) { const n = Math.ceil(V.t), k = V.t % 1; ctx.globalAlpha = .35 + k * .4; txt(ctx, '' + n, W / 2, 120, 70 + k * 20, '#ff4d6d', 'center', 6); ctx.globalAlpha = 1; }
     if (!me) return;
-    if (me.dead > 0 && V.phase === 'train') {
+    if (me.dead > 0 && (V.phase === 'train' || V.phase === 'battle')) {
       ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, H / 2 - 60, W, 120);
-      txt(ctx, '撃破された!', W / 2, H / 2 - 22, 36, '#ff4d4d', 'center', 5);
-      txt(ctx, Math.ceil(me.dead) + ' 秒後にミニノーマルで復活', W / 2, H / 2 + 22, 20, '#fff', 'center', 4);
+      txt(ctx, V.phase === 'battle' ? '撃破された! デス +1' : '撃破された!', W / 2, H / 2 - 22, 36, '#ff4d4d', 'center', 5);
+      txt(ctx, Math.ceil(me.dead) + (V.phase === 'battle' ? ' 秒後に復活' : ' 秒後にミニノーマルで復活'), W / 2, H / 2 + 22, 20, '#fff', 'center', 4);
     }
     if (me.out && V.phase === 'battle') {
       const f = V.players[Render.follow];
@@ -441,7 +454,7 @@ const UI = {
       if (this.lastRou !== 'done') { this.lastRou = 'done'; Sound.play('chest', 1); FX.flash = .3; FX.flashCol = A.col; }
       ctx.strokeStyle = A.col; ctx.lineWidth = 4; ctx.strokeRect(W / 2 - 240 - f * 10, cy - 32 - f * 6, 480 + f * 20, 64 + f * 12);
       txt(ctx, A.desc, W / 2, cy + 70, 18, '#fff', 'center', 3);
-      txt(ctx, '全員のマシンが全回復! 最後まで生き残れ!', W / 2, cy + 110, 16, '#ffe14d', 'center', 3);
+      txt(ctx, '全員全回復! 何度でも復活! デスが一番少ない人の勝ち!', W / 2, cy + 110, 16, '#ffe14d', 'center', 3);
     }
   },
   drawResult(ctx, V, time) {
@@ -449,22 +462,22 @@ const UI = {
     for (let i = 0; i < 60; i++) { const x = (i * 131 + Math.sin(time + i) * 30) % W, y = (time * (60 + i % 7 * 20) + i * 41) % H; ctx.fillStyle = ['#ff4d6d', '#ffe14d', '#4dc3ff', '#5fe36a', '#c86bff'][i % 5]; ctx.fillRect(x, y, 6, 3); }
     txt(ctx, 'RESULT', W / 2, 46, 40, '#ffe14d', 'center', 6);
     const R = V.result; if (!R) return;
-    const [wid, , wk, wst, wm] = R[0]; const wp = V.players[wid];
+    const [wid, , wk, wst, wm, wd] = R[0]; const wp = V.players[wid];
     panel(ctx, 60, 90, 360, 330, 'rgba(30,24,60,.9)', '#ffe14d');
     txt(ctx, '★ WINNER ★', 240, 120, 24, '#ffe14d', 'center', 4);
     ctx.save(); ctx.translate(240, 220); ctx.rotate(-Math.PI / 2 + Math.sin(time * 2) * .1); const img = GFX.machine[wm], s = 7; ctx.imageSmoothingEnabled = false; ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
     txt(ctx, wp ? wp.name : '', 240, 318, 32, wp ? PLAYER_COLS[wp.col] : '#fff', 'center', 5);
     txt(ctx, MACHINES[wm].name, 240, 352, 16, MACHINES[wm].col, 'center', 3);
-    txt(ctx, '撃破 ' + wk + '   ステータス合計 ' + wst, 240, 384, 14, '#fff', 'center', 3);
+    txt(ctx, 'デス ' + wd + '   撃破 ' + wk + '   ステータス合計 ' + wst, 240, 384, 14, '#fff', 'center', 3);
     panel(ctx, 450, 90, 450, 400, 'rgba(12,12,36,.9)');
-    txt(ctx, '順位', 470, 112, 14, '#aaa'); txt(ctx, '名前', 530, 112, 14, '#aaa'); txt(ctx, '撃破', 800, 112, 14, '#aaa', 'center'); txt(ctx, 'ステ', 860, 112, 14, '#aaa', 'center');
+    txt(ctx, '順位', 470, 112, 14, '#aaa'); txt(ctx, '名前', 530, 112, 14, '#aaa'); txt(ctx, 'デス', 760, 112, 14, '#aaa', 'center'); txt(ctx, '撃破', 820, 112, 14, '#aaa', 'center'); txt(ctx, 'ステ', 872, 112, 14, '#aaa', 'center');
     let shown = R.slice(0, 14); const mi = R.findIndex(r => r[0] === Render.meId); if (mi >= 14) shown = R.slice(0, 13).concat([R[mi]]);
     shown.forEach((r, i) => {
       const p = V.players[r[0]], y = 140 + i * 25, mine = r[0] === Render.meId;
       if (mine) { ctx.fillStyle = 'rgba(255,225,77,.18)'; ctx.fillRect(456, y - 11, 438, 22); }
       txt(ctx, r[1] + '位', 470, y, 15, r[1] === 1 ? '#ffe14d' : r[1] <= 3 ? '#ffb43d' : '#fff', 'left', 3);
       txt(ctx, (p ? p.name : '?') + (mine ? ' (YOU)' : ''), 530, y, 15, p ? PLAYER_COLS[p.col] : '#fff', 'left', 3);
-      txt(ctx, '' + r[2], 800, y, 15, '#fff', 'center', 3); txt(ctx, '' + r[3], 860, y, 15, '#fff', 'center', 3);
+      txt(ctx, '' + r[5], 760, y, 15, '#ff9b9b', 'center', 3); txt(ctx, '' + r[2], 820, y, 15, '#fff', 'center', 3); txt(ctx, '' + r[3], 872, y, 15, '#fff', 'center', 3);
     });
     const blink = Math.floor(time * 2) % 2;
     if (blink) txt(ctx, Net.role === 'client' ? 'ホストの操作を待っています…' : 'Z: タイトルへ戻る', W / 2, H - 24, 18, '#fff', 'center', 3);

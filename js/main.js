@@ -2,8 +2,9 @@
 // ============================================================
 //  メイン (シーン管理 / メニュー / ループ)
 // ============================================================
-const Settings = { name: 'プレイヤー', n: 8, time: 180, lv: 1, bgm: .5, sfx: .7, shake: true };
+const Settings = { name: 'プレイヤー', n: 8, time: 180, btime: 120, lv: 1, bgm: .5, sfx: .7, shake: true };
 const TIME_OPTS = [60, 120, 180, 240, 300, 420, 600];
+const BTIME_OPTS = [60, 90, 120, 180, 240, 300];
 const LV_NAME = ['よわい', 'ふつう', 'つよい'];
 function loadSettings() { try { Object.assign(Settings, JSON.parse(localStorage.getItem('starshoot') || '{}')); } catch (e) { } }
 function saveSettings() { try { localStorage.setItem('starshoot', JSON.stringify(Settings)); } catch (e) { } }
@@ -109,7 +110,7 @@ const Scenes = {
   },
   // ---- CPU戦 / ホストの設定 ----
   setup: {
-    rows() { const r = ['名前', '人数', 'トレーニング時間', 'CPUの強さ', 'スタート!']; return r; },
+    rows() { const r = ['名前', '人数', 'トレーニング時間', 'バトル時間', 'CPUの強さ', 'スタート!']; return r; },
     update(dt) {
       const rows = this.rows(); menuNav(rows.length, dt);
       const humans = Scene.mode === 'host' ? 1 + Net.conns.length : 1;
@@ -119,29 +120,30 @@ const Scenes = {
         Sound.play('move');
         if (Scene.sel === 1) Settings.n = clamp(Settings.n + d, Math.max(2, humans), 64);
         if (Scene.sel === 2) Settings.time = TIME_OPTS[clamp(TIME_OPTS.indexOf(Settings.time) + d, 0, TIME_OPTS.length - 1)] || 180;
-        if (Scene.sel === 3) Settings.lv = clamp(Settings.lv + d, 0, 2);
-        saveSettings(); if (Scene.mode === 'host') { Net.cfg = { n: Settings.n, time: Settings.time, lv: Settings.lv }; Net.sendLobby(); }
+        if (Scene.sel === 3) Settings.btime = BTIME_OPTS[clamp(BTIME_OPTS.indexOf(Settings.btime) + d, 0, BTIME_OPTS.length - 1)] || 120;
+        if (Scene.sel === 4) Settings.lv = clamp(Settings.lv + d, 0, 2);
+        saveSettings(); if (Scene.mode === 'host') { Net.cfg = { n: Settings.n, time: Settings.time, bt: Settings.btime, lv: Settings.lv }; Net.sendLobby(); }
       }
       if (Input.hit(IN.Z)) {
         if (Scene.sel === 0) TextEntry.open('名前 (10文字まで)', Settings.name, 10, v => { if (v) { Settings.name = v; saveSettings(); Net.sendLobby(); } });
-        else if (Scene.sel === 4) { if (Scene.mode === 'host' && !(Net.peer && Net.peer.open)) { Sound.play('back'); return; } Sound.play('ok'); startGame(); }
+        else if (Scene.sel === 5) { if (Scene.mode === 'host' && !(Net.peer && Net.peer.open)) { Sound.play('back'); return; } Sound.play('ok'); startGame(); }
       }
       if (Input.hit(IN.X)) { Sound.play('back'); if (Scene.mode === 'host') Net.reset(); go('title'); }
     },
     draw(dt) {
       drawStarfield(dt);
       txt(ctx, Scene.mode === 'host' ? 'フレンド戦: ルーム' : 'CPU戦 設定', W / 2, 44, 30, '#ffe14d', 'center', 5);
-      const vals = [Settings.name, Settings.n + ' 人', (Settings.time / 60) + ' 分', LV_NAME[Settings.lv], ''];
+      const vals = [Settings.name, Settings.n + ' 人', (Settings.time / 60) + ' 分', (Settings.btime / 60) + ' 分', LV_NAME[Settings.lv], ''];
       const rows = this.rows(), x = Scene.mode === 'host' ? 300 : W / 2;
       rows.forEach((r, i) => {
         const y = 110 + i * 56, on = i === Scene.sel;
         panel(ctx, x - 230, y - 22, 460, 44, on ? 'rgba(60,40,120,.9)' : 'rgba(20,20,50,.7)', on ? '#ffe14d' : '#3a3a6a');
-        if (i === 4) { txt(ctx, Scene.mode === 'host' && !(Net.peer && Net.peer.open) ? '準備中…' : 'スタート!', x, y, 22, on ? '#ffe14d' : '#fff', 'center', 3); return; }
+        if (i === 5) { txt(ctx, Scene.mode === 'host' && !(Net.peer && Net.peer.open) ? '準備中…' : 'スタート!', x, y, 22, on ? '#ffe14d' : '#fff', 'center', 3); return; }
         txt(ctx, r, x - 210, y, 17, on ? '#fff' : '#aaa', 'left', 3);
         txt(ctx, (i > 0 && on ? '◀ ' : '') + vals[i] + (i > 0 && on ? ' ▶' : ''), x + 210, y, 19, '#ffffff', 'right', 3);
       });
       const humans = Scene.mode === 'host' ? 1 + Net.conns.length : 1;
-      txt(ctx, `プレイヤー ${humans}人 + CPU ${Math.max(0, Settings.n - humans)}人  /  イベント 約${clamp(Math.floor((Settings.time - 30) / 50), 1, 9)}回`, x, 400, 15, '#8ad0ff', 'center', 3);
+      txt(ctx, `プレイヤー ${humans}人 + CPU ${Math.max(0, Settings.n - humans)}人  /  イベント 約${clamp(Math.floor((Settings.time - 30) / 50), 1, 9)}回`, x, 450, 15, '#8ad0ff', 'center', 3);
       if (Scene.mode === 'host') {
         panel(ctx, 560, 90, 370, 380, 'rgba(12,12,36,.85)', '#8a8ad0');
         txt(ctx, 'ルームコード', 745, 116, 16, '#aaa', 'center', 0);
@@ -179,7 +181,7 @@ const Scenes = {
         hint('↑↓: 選択   Z: 決定/入力   X: 戻る');
       } else {
         txt(ctx, Net.err || Net.status, W / 2, 120, 18, Net.err ? '#ff4d4d' : '#8ad0ff', 'center', 3);
-        if (Net.cfg) txt(ctx, `人数 ${Net.cfg.n}人 / トレーニング ${Net.cfg.time / 60}分 / CPU ${LV_NAME[Net.cfg.lv]}`, W / 2, 160, 16, '#fff', 'center', 3);
+        if (Net.cfg) txt(ctx, `人数 ${Net.cfg.n}人 / トレーニング ${Net.cfg.time / 60}分 / バトル ${(Net.cfg.bt || 120) / 60}分 / CPU ${LV_NAME[Net.cfg.lv]}`, W / 2, 160, 16, '#fff', 'center', 3);
         panel(ctx, W / 2 - 200, 190, 400, 260, 'rgba(12,12,36,.85)');
         Net.lobby.slice(0, 10).forEach((n, i) => txt(ctx, (i + 1) + '. ' + n, W / 2 - 180, 214 + i * 23, 15, PLAYER_COLS[i % PLAYER_COLS.length], 'left', 3));
         const dots = '.'.repeat(1 + Math.floor(time * 2) % 3); txt(ctx, 'ホストの開始を待っています' + dots, W / 2, 480, 16, '#fff', 'center', 3);
@@ -190,7 +192,7 @@ const Scenes = {
   howto: {
     pages: [
       ['操作方法', ['矢印キー : 移動 / 向きを変える', 'Z (押しっぱなし) : アクセル + ショット連射', '　→ Zを押すと向いている方向へ全速前進しながら撃つ', '　→ 矢印だけなら撃たずにゆっくり移動', 'X : マシンの近くなら乗り換え / それ以外はアイテム使用', 'X 長押し : アイテムスロットの入れ替え', 'M : ミュート    Esc : ポーズ(CPU戦)']],
-      ['試合の流れ', ['① トレーニング : 制限時間内にマシンを強くしよう', '　・雑魚敵を倒す → ステータスアイテムが落ちる', '　・宝箱を壊す → ラストアタックした人が中身を総取り', '　・他のマシンに乗り換える → 乗っていた時間に応じてボーナス', '　・時々イベントが発生! 試合が大きく動く', '② バトル : ルーレットで選ばれた闘技場で最後の1人まで戦う', '　・開始時に全回復。安全地帯がだんだん狭くなる']],
+      ['試合の流れ', ['① トレーニング : 制限時間内にマシンを強くしよう', '　・雑魚敵を倒す → ステータスアイテムが落ちる', '　・宝箱を壊す → ラストアタックした人が中身を総取り', '　・他のマシンに乗り換える → 乗っていた時間に応じてボーナス', '　・時々イベントが発生! 試合が大きく動く', '② バトル : ルーレットで選ばれた闘技場で制限時間まで戦う', '　・何度でも復活。やられるとデス+1、倒すとデス-1', '　・時間切れの時、デスが一番少ない人の勝ち!']],
       ['ステータスとマシン', ['アタック : ショットの威力    スピード : 移動の速さ', 'ディフェンス : 受けるダメージを減らす    レンジ : 射程', 'マシンごとに得意(▲)・苦手(▼)なステータスがある', 'HPは100%固定。マシンは回復しない → 乗り換えで全回復!', 'ダメージを受けるとステータスがこぼれる。撃破されると大量に散らばり、', '倒した人が一部を吸い取る。十数秒後にミニノーマルで復活']],
       ['アイテム', ['N(緑) 自動発動 : ミニジェット / ミニダンベル / ミニメガネ / ミニバリア / ミニボム', 'R(青) 2つまで所持、Xで使用 :', '　ジェット / ダンベル / メガネ / バリア / ビッグボム', '　ビッグソード(3回まで斬れる) / ビッグアロー(7秒チャージ→無限射程)', 'SR(金) : 番組表 = この試合のイベント予定が見える', '　レジェンドパーツ = 同じ種類を3つ集めると伝説マシンに変身!', '　(パーツは攻撃されると落とすことがある)']],
       ['イベント', ['巨大モンスター / 鍵付き宝箱 / 巨大隕石 / ゴールドラッシュ', 'レインボーフィッシュ / マシン襲来 / ハイスピード', 'フラワーラビリンス / モンスターラッシュ / ビッグボール', 'スケールダウン / ワープホール / スターシャワー', '発生すると画面上に告知、矢印で場所を案内、', 'ミニマップの下に説明が出る']],
@@ -294,7 +296,7 @@ function startGame() {
   const humans = [{ name: Settings.name, local: true }];
   if (Scene.mode === 'host') { assignPeerIds(); for (const c of Net.conns) humans.push({ name: c.pname, peer: c }); }
   const n = Math.max(Settings.n, humans.length);
-  const cfg = { n, trainTime: Settings.time, cpuLevel: Settings.lv, seed: (Math.random() * 1e9) | 0, humans, pub: { n, time: Settings.time, lv: Settings.lv } };
+  const cfg = { n, trainTime: Settings.time, battleTime: Settings.btime || 120, cpuLevel: Settings.lv, seed: (Math.random() * 1e9) | 0, humans, pub: { n, time: Settings.time, lv: Settings.lv } };
   const g = new Game(cfg);
   g.onFx = (t, x, y, a, b, c) => FX.play(t, x, y, a, b, c, g);
   g.onGfx = a => UI.onGfx(a, g);

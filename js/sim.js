@@ -4,7 +4,7 @@
 // ============================================================
 const DT = 1 / 60;
 const CPU_NAMES = ['ポチ', 'タマ', 'ジロー', 'ハヤテ', 'コメット', 'ルナ', 'ソラ', 'ミント', 'レオ', 'ナギ', 'ピコ', 'ガロ', 'ユキ', 'ベガ', 'リゲル', 'シリウス', 'ノヴァ', 'クロ', 'モモ', 'キラ', 'ジェット', 'ボルト', 'メテオ', 'アトム'];
-const RESPAWN_T = 12;
+const RESPAWN_T = 12, BATTLE_RESPAWN = 3;
 
 class SpatialGrid {
   constructor(cell) { this.c = cell; this.m = new Map(); this.pool = []; }
@@ -52,7 +52,7 @@ class Game {
     return {
       id, name, cpu, col: id % PLAYER_COLS.length, x: 0, y: 0, vx: 0, vy: 0, a: 0, m: 0, hp: 100, st: [0, 0, 0, 0],
       ride: 0, cd: 0, items: [], buf: { jet: 0, dumb: 0, glass: 0, bar: 0 }, inv: 2, dead: 0, out: false, flash: 0,
-      parts: [0, 0, 0], key: false, tv: false, arw: null, dmgAcc: 0, kills: 0, place: 0, dmgBoss: 0, notes: [], mask: 0, pmask: 0,
+      parts: [0, 0, 0], key: false, deaths: 0, bk: 0, tv: false, arw: null, dmgAcc: 0, kills: 0, place: 0, dmgBoss: 0, notes: [], mask: 0, pmask: 0,
       xHold: -1, sa: 1, ss: 1, sd: 1, sr: 1, lastAtk: -1, mask2: 0, ai: null, slash: 0, z: false,
     };
   }
@@ -228,7 +228,7 @@ class Game {
   }
   damagePlayer(p, raw, src, trueDmg) {
     if (p.dead > 0 || p.out || p.inv > 0 || p.buf.bar > 0) return;
-    if (this.phase === 'battle' && this.count > 0) return;
+    if (this.phase === 'battle' && (this.count > 0 || this.over)) return;
     if (this.phase !== 'train' && this.phase !== 'battle') return;
     const d = trueDmg ? raw : raw / p.sd;
     p.hp -= d; p.flash = .12; if (src >= 0) { p.lastAtk = src; p.lastAtkT = this.elapsed; }
@@ -268,10 +268,11 @@ class Game {
       p.dead = RESPAWN_T; p.dmgAcc = 0;
       this.note(p, '撃破された… ' + RESPAWN_T + '秒後に復活', '#ff4d4d');
     } else {
+      // バトル: 無限復活。やられるとデス+1、倒すとデス-1
       this.scatter(p.x, p.y, drops, 90);
-      p.out = true; p.dead = 1;
-      p.place = this.players.filter(q => !q.out).length + 1;
-      this.note(p, p.place + '位 で脱落…', '#ff4d4d');
+      p.deaths++; p.dead = BATTLE_RESPAWN;
+      if (K && K !== p) { K.deaths--; K.bk++; this.note(K, 'デス -1', '#5fe36a'); }
+      this.note(p, 'デス +1  ' + BATTLE_RESPAWN + '秒後に復活', '#ff4d4d');
     }
   }
   damageEnemy(e, dmg, src) {
@@ -361,7 +362,8 @@ class Game {
       return;
     } else if (this.phase === 'battle') {
       if (this.count > 0) { this.count -= dt; if (this.count <= 0) this.fx('go', 0, 0); }
-      else this.updateZone(dt);
+      else if (!this.over) { this.updateZone(dt); this.t -= dt; if (this.t <= 0) { this.t = 0; this.over = true; this.endT = 2.5; this.bullets.length = 0; this.gfxEv('timeup'); } }
+      else { this.endT -= dt; if (this.endT <= 0) { this.finish(); return; } }
     } else if (this.phase === 'result') { this.t -= dt; return; }
 
     // AI / 入力
@@ -381,7 +383,6 @@ class Game {
     for (const c of this.chests) { c.flash = Math.max(0, c.flash - dt); c.t += dt; }
     if (this.chests.some(c => c.hp <= 0)) this.chests = this.chests.filter(c => c.hp > 0);
     for (const m of this.machines) m.t += dt;
-    if (this.phase === 'battle' && this.count <= 0) this.checkWin(dt);
   }
   calcAll() { for (const p of this.players) this.calcStats(p); }
   spawnLoop(dt) {
@@ -396,13 +397,17 @@ class Game {
     p.flash = Math.max(0, p.flash - dt); p.slash = Math.max(0, p.slash - dt);
     if (p.dead > 0) {
       p.dead -= dt;
+      if (p.dead <= 0 && this.phase === 'battle') { // 安全地帯の中のランダムな場所に、同じマシンで復活
+        const z = this.zone, pos = this.map.freePos(8, Math.random, 40, { x: z.x, y: z.y, r: Math.max(30, z.r * .8) });
+        p.x = pos.x; p.y = pos.y; p.hp = 100; p.inv = 2.5; p.vx = p.vy = 0; this.map.unstuck(p, 7); this.fx('spawn', p.x, p.y, p.id);
+      }
       if (p.dead <= 0 && this.phase === 'train') { p.m = 0; p.hp = 100; p.ride = 0; p.inv = 2.5; p.vx = p.vy = 0; this.map.unstuck(p, 7); this.fx('spawn', p.x, p.y, p.id); }
       p.pmask = p.mask; return;
     }
     p.inv = Math.max(0, p.inv - dt); p.cd -= dt; p.ride += dt;
     for (const k in p.buf) p.buf[k] = Math.max(0, p.buf[k] - dt);
     if (MACHINES[p.m].legend && p.hp < 100) p.hp = Math.min(100, p.hp + 1.2 * dt);
-    const frozen = this.phase === 'battle' && this.count > 0;
+    const frozen = this.phase === 'battle' && (this.count > 0 || this.over);
     const m = frozen ? 0 : (p.mask | (p.latch | 0)), pm = p.pmask; p.pmask = m; p.latch = 0;
     const dir = p.cpu ? p.aiDir : maskDir(m);
     const z = (m & IN.Z) !== 0; p.z = z;
@@ -492,7 +497,7 @@ class Game {
       if (!b.pierce) { alive = false; return true; }
       return false;
     };
-    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 11 : 6) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
+    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 14 : 6) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
     if (alive && own >= 0) {
       if (this.boss) tryHit(this.boss, 4, 38);
       if (alive && this.fish) tryHit(this.fish, 5, 42);
@@ -573,7 +578,7 @@ class Game {
     const n = this.n();
     this.arena = idx; this.arenaSeed = this.rou.seed;
     this.map = genArena(idx, this.arenaSeed, n);
-    this.phase = 'battle'; this.count = 3.5; this.battleT = 0;
+    this.phase = 'battle'; this.count = 3.5; this.battleT = 0; this.t = this.cfg.battleTime || 120; this.over = false; this.endT = 0;
     this.enemies = []; this.pickups = []; this.chests = []; this.machines = []; this.bullets = [];
     this.boss = this.fish = null; this.balls = []; this.meteors = []; this.warps = []; this.wilds = []; this.speedMul = 1;
     const R = this.map.R; this.zone = { x: this.map.cx, y: this.map.cy, r: R + 20, r0: R + 20 };
@@ -581,7 +586,7 @@ class Game {
     order.forEach((p, i) => {
       const a = i / n * TAU, d = R * (n > 24 && i % 2 ? .5 : .72);
       p.x = this.map.cx + Math.cos(a) * d; p.y = this.map.cy + Math.sin(a) * d; p.a = a + Math.PI; p.vx = p.vy = 0;
-      p.hp = 100; p.dead = 0; p.out = false; p.inv = 0; p.arw = null; p.key = false; p.place = 0; p.flash = 0;
+      p.hp = 100; p.dead = 0; p.out = false; p.inv = 0; p.arw = null; p.key = false; p.place = 0; p.flash = 0; p.deaths = 0; p.bk = 0;
       for (const k in p.buf) p.buf[k] = 0;
       this.map.unstuck(p, 7);
     });
@@ -590,23 +595,18 @@ class Game {
   }
   updateZone(dt) {
     this.battleT += dt; const z = this.zone, R = z.r0, t = this.battleT;
-    const shrinkStart = 8, shrinkDur = 55 + this.n() * 1.2;
-    let target = R; if (t > shrinkStart) target = lerp(R, R * .14, Math.min(1, (t - shrinkStart) / shrinkDur));
-    if (t > shrinkStart + shrinkDur + 15) target = Math.max(0, R * .14 - (t - shrinkStart - shrinkDur - 15) * 3);
-    z.r = target;
+    // 安全地帯はバトル時間の7割をかけて 40% まで縮む(0 にはしない)
+    const total = this.cfg.battleTime || 120, shrinkStart = 8, shrinkDur = Math.max(10, total * .7 - shrinkStart);
+    z.r = t > shrinkStart ? lerp(R, R * .4, Math.min(1, (t - shrinkStart) / shrinkDur)) : R;
     this.itemT -= dt;
     if (this.itemT <= 0) { this.itemT = 5; if (this.chests.length < 3 + Math.floor(this.n() / 3)) this.spawnChest('I', this.map.freePos(10, Math.random, 40, { x: z.x, y: z.y, r: Math.max(20, z.r * .8) })); }
   }
-  checkWin(dt) {
-    const alive = this.players.filter(p => !p.out);
-    if (alive.length <= 1 && !this.endT) { this.endT = 2.5; if (alive[0]) { alive[0].place = 1; this.gfxEv('winner', alive[0].id); } }
-    if (this.endT) { this.endT -= dt; if (this.endT <= 0) this.finish(); }
-  }
+  // 順位: デス数が少ない順 → 同じならバトルでの撃破数が多い順
+  ranking() { return this.players.slice().sort((a, b) => (a.deaths - b.deaths) || (b.bk - a.bk) || (a.id - b.id)); }
   finish() {
     this.phase = 'result'; this.t = 0;
-    const ranked = this.players.slice().sort((a, b) => (a.place || 99) - (b.place || 99));
-    if (ranked[0] && !ranked[0].place) ranked[0].place = 1;
-    this.result = ranked.map(p => [p.id, p.place, p.kills, this.totalSt(p), p.m]);
+    const ranked = this.ranking(); ranked.forEach((p, i) => p.place = i + 1);
+    this.result = ranked.map(p => [p.id, p.place, p.bk, this.totalSt(p), p.m, p.deaths]);
     this.gfxEv('phase', 'result');
   }
 }
