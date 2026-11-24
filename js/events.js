@@ -8,14 +8,14 @@ const EVENT_DEFS = {
   keys: { name: '鍵付き宝箱出現!', short: '鍵付き宝箱', col: '#ffe14d', major: 1, w: 8, dur: 70, desc: '3つの鍵と3つの鍵付き宝箱が出現! 鍵を持って宝箱に触れると開く。鍵は相手を撃破すると奪える!' },
   meteor: { name: '巨大隕石襲来!', short: '巨大隕石', col: '#ff6a2e', major: 1, w: 9, dur: 32, desc: '隕石が大量落下! 赤い警告円から逃げろ! 落下跡にはステータスが…最後に超巨大隕石が落ちる!' },
   gold: { name: 'ゴールドラッシュ!', short: 'ゴールドラッシュ', col: '#ffcc33', major: 1, w: 9, dur: 50, desc: '金色宝箱が大量出現! 壊しやすいが中身は少なめ。虹色の金鉱石は大当たり!' },
-  fish: { name: 'レインボーフィッシュ!', short: 'レインボーフィッシュ', col: '#ff7ad9', major: 0, w: 4, dur: 60, desc: '巨大な虹色魚がゆっくり行進中! 攻撃するほどアイテムとステータスがこぼれる!' },
+  fish: { name: 'レインボーフィッシュ!', short: 'レインボーフィッシュ', col: '#ff7ad9', major: 0, w: 4, dur: 60, desc: '虹色の金魚が虹の軌跡を残して泳ぐ! 倒せないが、攻撃するほどアイテムとステータスがこぼれる!' },
   wild: { name: 'マシン襲来!', short: 'マシン襲来', col: '#3dffe0', major: 0, w: 4, dur: 50, desc: '野生マシンが暴走中! 撃つと鈍り、スタンしたら近づいて X で乗れる! 虹色の伝説マシンも1台…!' },
   speed: { name: 'ハイスピード!', short: 'ハイスピード', col: '#4dc3ff', major: 1, w: 9, dur: 30, desc: '全員の移動速度が超アップ! スピードラビットも大発生! いろんなステータスを落とすぞ' },
   maze: { name: 'フラワーラビリンス!', short: 'フラワーラビリンス', col: '#ff7ad9', major: 0, w: 4, dur: 45, desc: 'マップが花の迷路に! 曲がり角にステータスやアイテムが次々出現。走り回れ!' },
   rush: { name: 'モンスターラッシュ!', short: 'モンスターラッシュ', col: '#ff4d4d', major: 1, w: 10, dur: 40, desc: 'エリアに雑魚敵が大量発生!' },
   ball: { name: 'ビッグボール!', short: 'ビッグボール', col: '#ff9b3d', major: 0, w: 5, dur: 40, desc: '巨大ボールが跳ね回る! 当たるとダメージ。宝箱や敵は一撃で壊れてアイテムを落とす!' },
   shrink: { name: 'スケールダウン!', short: 'スケールダウン', col: '#a0a8c0', major: 0, w: 4, dur: 35, desc: 'マップが一時的に狭くなる! 大混戦に備えろ!' },
-  warp: { name: 'ワープホール!', short: 'ワープホール', col: '#b07aff', major: 0, w: 4, dur: 45, desc: 'ワープホールが出現! 入ると対のホールへ瞬間移動。初めて通るホールではステータスボーナス!' },
+  warp: { name: 'ワープホール!', short: 'ワープホール', col: '#b07aff', major: 0, w: 4, dur: 45, desc: 'ワープホールが大量出現! 入るとランダムな別のホールへワープ。初めて通るホールではステータスボーナス!' },
   star: { name: 'スターシャワー!', short: 'スターシャワー', col: '#fff3b0', major: 1, w: 8, dur: 22, desc: 'ステータスの流れ星がマップ中に降り注ぐ! 拾い放題!' },
 };
 const EVENT_KEYS = Object.keys(EVENT_DEFS);
@@ -192,10 +192,10 @@ const Events = {
   u_fish(g, c) { if (!g.fish) c.done = true; },
   e_fish(g) { if (g.fish) { g.fx('vanish', g.fish.x, g.fish.y); g.fish = null; } },
   damageFish(g, f, dmg, src) {
-    if (f.hp <= 0) return; f.hp -= dmg; f.acc += dmg; f.flash = .06;
+    // 体力の概念なし: ダメージが一定たまるたびにアイテム・ステータスがこぼれる
+    f.acc += dmg; f.flash = .06;
     const step = f.mhp * .012;
     while (f.acc >= step) { f.acc -= step; g.scatter(f.x, f.y, [Math.random() < .15 ? g.rollItem(Math.random() < .25) : rndi(0, 3)], 120); }
-    if (f.hp <= 0) { g.fx('bossDie', f.x, f.y); g.scatter(f.x, f.y, g.makeLoot(16, 1, 1, .4, .2).concat([g.rollItem(true)]), 180); g.gfxEv('fishDown', src); g.fish = null; }
   },
 
   // ---------- マシン襲来 ----------
@@ -248,10 +248,10 @@ const Events = {
     c.spawn -= dt;
     if (c.spawn <= 0) {
       c.spawn = Math.max(.25, 1.5 - g.n() * .02);
-      const cn = pick(c.corners); if (cn) { const pos = { x: cn.x, y: cn.y }; g.map.unstuck(pos, 4); const codes = [rndi(0, 3), rndi(0, 3)]; if (Math.random() < .5) codes.push(rndi(0, 3)); if (Math.random() < .2) codes.push(g.rollItem(Math.random() < .3)); g.fx('flowerPop', pos.x, pos.y); g.scatter(pos.x, pos.y, codes, 40); }
+      const cn = pick(c.corners); if (cn) { const pos = { x: cn.x, y: cn.y }; g.map.unstuck(pos, 4); const codes = [rndi(0, 3), rndi(0, 3)]; if (Math.random() < .5) codes.push(rndi(0, 3)); if (Math.random() < .2) codes.push(g.rollItem(Math.random() < .3)); g.fx('flowerPop', pos.x, pos.y); g.scatter(pos.x, pos.y, codes, 40, 'maze'); }
     }
   },
-  e_maze(g) { g.map.over = null; g.map.buildMini(); },
+  e_maze(g) { g.map.over = null; g.map.buildMini(); let n = 0; g.pickups = g.pickups.filter(k => { if (k.tag !== 'maze') return true; if (n++ % 3 === 0) g.fx('vanish', k.x, k.y); return false; }); }, // 残ったアイテムは消える(急いで集めよう)
 
   // ---------- モンスターラッシュ ----------
   s_rush(g, c) {
@@ -305,18 +305,17 @@ const Events = {
 
   // ---------- ワープホール ----------
   s_warp(g, c) {
-    const n = Math.min(8, 3 + Math.round(g.n() / 12));
-    for (let i = 0; i < n; i++) { const a = g.map.freePos(16), b = g.map.freePos(16); g.warps.push({ id: g.id(), x: a.x, y: a.y, x2: b.x, y2: b.y, used: {} }); }
+    const n = Math.min(30, 12 + Math.round(g.n() / 3)); // 大量のワープホール。入るとランダムな別のホールへ
+    for (let i = 0; i < n; i++) { const a = g.map.freePos(16); g.warps.push({ id: g.id(), x: a.x, y: a.y, hue: i % 6, used: {} }); }
   },
-  e_warp(g) { for (const w of g.warps) { g.fx('vanish', w.x, w.y); g.fx('vanish', w.x2, w.y2); } g.warps = []; },
+  e_warp(g) { for (const w of g.warps) g.fx('vanish', w.x, w.y); g.warps = []; },
   updateWarp(g, w, dt) {
     for (const p of g.players) {
       if (p.out || p.dead > 0 || p.warpCd > g.elapsed) continue;
-      let to = null, key;
-      if (d2(p.x, p.y, w.x, w.y) < 14 * 14) { to = [w.x2, w.y2]; key = 'a'; } else if (d2(p.x, p.y, w.x2, w.y2) < 14 * 14) { to = [w.x, w.y]; key = 'b'; }
-      if (to) {
-        g.fx('warp', p.x, p.y); p.x = to[0] + Math.cos(p.a) * 20; p.y = to[1] + Math.sin(p.a) * 20; g.map.unstuck(p, 7); p.warpCd = g.elapsed + 1.2; g.fx('warp', p.x, p.y);
-        const uk = p.id + key; if (!w.used[uk]) { w.used[uk] = 1; const k = rndi(0, 3); g.addStat(p, k); g.note(p, 'ワープボーナス +' + STAT_SHORT[k], STAT_COL[k]); }
+      if (d2(p.x, p.y, w.x, w.y) < 15 * 15) {
+        const others = g.warps.filter(o => o !== w), to = pick(others); if (!to) continue;
+        g.fx('warp', p.x, p.y); p.x = to.x + Math.cos(p.a) * 22; p.y = to.y + Math.sin(p.a) * 22; g.map.unstuck(p, 7); p.warpCd = g.elapsed + 1.2; g.fx('warp', p.x, p.y);
+        if (!w.used[p.id]) { w.used[p.id] = 1; const k = rndi(0, 3); g.addStat(p, k); g.note(p, STAT_NAME[k] + ' UP!', STAT_COL[k], 's' + k); }
       }
     }
   },

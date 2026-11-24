@@ -108,7 +108,9 @@ class Game {
   }
   // ---------- ピックアップ ----------
   // 出現できるパーツの種類: 1種類目が3つ出終わると2種類目、2種類目が完成すると3種類目
-  partKind() { const L = this.legend; if (L.spawned[0] < 3) return 0; if (L.spawned[1] < 3) return 1; if (L.done[1] && L.spawned[2] < 3) return 2; return -1; }
+  // 出現するパーツの種類: 未完成の種類から選ぶ。出始めた種類(完成まで)はとても出やすい
+  partKind() { const L = this.legend, c = []; for (let k = 0; k < 3; k++) if (!L.done[k] && L.spawned[k] < 3) c.push(k); if (!c.length) return -1; const w = c.map(k => L.spawned[k] > 0 ? 5 : 1), tot = w.reduce((a, b) => a + b); let r = Math.random() * tot; for (let i = 0; i < c.length; i++) { r -= w[i]; if (r <= 0) return c[i]; } return c[0]; }
+  partBoost() { const L = this.legend; return L.spawned.some((s, k) => s > 0 && s < 3 && !L.done[k]) ? 4.5 : 1.8; }
   rollItem(rare) {
     if (rare) { const tot = Object.values(R_WEIGHT).reduce((a, b) => a + b, 0); let r = Math.random() * tot; for (const k of R_ITEMS) { r -= R_WEIGHT[k]; if (r <= 0) return PK_ITEM + ITEM_KEYS.indexOf(k); } }
     return PK_ITEM + ITEM_KEYS.indexOf(pick(N_ITEMS));
@@ -120,14 +122,14 @@ class Game {
     for (let i = 0; i < s; i++) out.push(rndi(0, 3));
     if (Math.random() < nP) out.push(this.rollItem(false));
     if (Math.random() < rP) out.push(this.rollItem(true));
-    const pk = this.partKind(); if (partP && pk >= 0 && Math.random() < partP) { this.legend.spawned[pk]++; out.push(PK_PART + pk); }
+    const pk = this.partKind(); if (partP && pk >= 0 && Math.random() < partP * this.partBoost()) { const piece = this.legend.spawned[pk]++; out.push(PK_PART + pk * 3 + piece); }
     if (tvP && Math.random() < tvP && this.tvAvail()) out.push(PK_ITEM + ITEM_KEYS.indexOf('tv'));
     return out;
   }
-  scatter(x, y, codes, spd = 90) {
+  scatter(x, y, codes, spd = 90, tag) {
     for (const k of codes) {
       const a = Math.random() * TAU, v = rnd(spd * .4, spd);
-      const pk = { id: this.id(), x, y, z: 0, vz: rnd(60, 110), vx: Math.cos(a) * v, vy: Math.sin(a) * v, k, t: 0, life: k < PK_ITEM ? 50 : (k >= PK_PART ? 1e9 : 70) };
+      const pk = { id: this.id(), x, y, z: 0, vz: rnd(60, 110), vx: Math.cos(a) * v, vy: Math.sin(a) * v, k, t: 0, life: k < PK_ITEM ? 50 : (k >= PK_PART ? 1e9 : 70), tag };
       this.pickups.push(pk);
     }
     if (this.pickups.length > 520) { // 古いステータスから消す
@@ -143,7 +145,7 @@ class Game {
   }
   applyPickup(p, k) {
     if (k < PK_ITEM) { const g = this.addStat(p, k); this.note(p, g ? STAT_NAME[k] + ' UP!' : STAT_NAME[k] + ' MAX', STAT_COL[k], 's' + k); return true; }
-    if (isPart(k)) { this.gainPart(p, k - PK_PART); return true; }
+    if (isPart(k)) { this.gainPart(p, Math.floor((k - PK_PART) / 3), (k - PK_PART) % 3); return true; }
     if (k === PK_KEY) { if (p.key) return false; p.key = true; this.note(p, '鍵をゲット!', '#ffe14d', 'k'); this.gfxEv('key', p.id); return true; }
     const key = ITEM_KEYS[k - PK_ITEM], it = ITEMS[key];
     if (it.rar === 'N') { this.activate(p, key); this.note(p, it.name + '!', RAR_COL.N, 'i' + key); return true; }
@@ -151,16 +153,16 @@ class Game {
     if (p.items.length >= 2) return false;
     p.items.push({ k: key, n: it.uses || 1 }); this.note(p, it.name + ' ゲット!', RAR_COL.R, 'i' + key); return true;
   }
-  gainPart(p, k) {
+  gainPart(p, k, piece) {
     const L = this.legend; if (L.done[k]) return;
-    p.parts[k]++; const mid = L.order[k];
-    this.note(p, MACHINES[mid].name + 'のパーツ ' + p.parts[k] + '/3', MACHINES[mid].col, 'p' + k);
-    if (p.parts[k] >= 3) {
+    p.parts[k] |= 1 << piece; const mid = L.order[k];
+    this.note(p, MACHINES[mid].name + ' ' + PART_NAME[piece], MACHINES[mid].col, 'p' + (k * 3 + piece));
+    if (p.parts[k] === 7) {
       L.done[k] = true;
       for (const q of this.players) q.parts[k] = 0;
-      this.pickups = this.pickups.filter(pk => pk.k !== PK_PART + k);
+      this.pickups = this.pickups.filter(pk => !(isPart(pk.k) && Math.floor((pk.k - PK_PART) / 3) === k));
       this.fx('legend', p.x, p.y, mid); this.fx('mexp', p.x, p.y, p.m);
-      p.m = mid; p.hp = 100; p.ride = 0; p.inv = Math.max(p.inv, 2);
+      p.m = mid; p.hp = 100; p.ride = 0; p.inv = Math.max(p.inv, 3.5);
       this.gfxEv('legend', p.id, mid);
     }
   }
@@ -189,23 +191,24 @@ class Game {
       return;
     }
     p.items.shift();
-    if (it.k === 'arrow') { p.arw = { t: 7, a: p.a, lock: 1 }; this.fx('arrowStart', p.x, p.y, p.id); this.gfxEv('arrow', p.id); return; }
+    if (it.k === 'arrow') { p.arw = { t: 5, a: p.a, lock: 1 }; this.fx('arrowStart', p.x, p.y, p.id); this.gfxEv('arrow', p.id); return; }
     this.activate(p, it.k); this.fx('use', p.x, p.y, ITEM_KEYS.indexOf(it.k));
   }
   explode(x, y, r, dmg, src, big) {
     this.fx(big ? 'bigbomb' : 'bomb', x, y, r);
     this.forTargets(x, y, r, (o, kind) => { if (kind === 1 && o.id === src) return; this.hit(o, kind, dmg, src, x, y); });
   }
-  fireArrow(p) {
-    const ca = Math.cos(p.arw.a), sa = Math.sin(p.arw.a), half = 15, dmg = 78 * p.sa;
-    this.fx('beam', p.x, p.y, Math.round(p.arw.a * 1000));
-    const test = (o, r) => { const dx = o.x - p.x, dy = o.y - p.y, along = dx * ca + dy * sa; if (along < 0) return false; const perp = Math.abs(-dx * sa + dy * ca); return perp < half + r; };
-    for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, p.x, p.y);
-    for (const e of this.enemies) if (test(e, 6)) this.hit(e, 2, dmg, p.id, p.x, p.y);
-    for (const c of this.chests) if (test(c, 9)) this.hit(c, 3, dmg, p.id, p.x, p.y);
-    if (this.boss && test(this.boss, 38)) this.hit(this.boss, 4, dmg, p.id, p.x, p.y);
-    if (this.fish && test(this.fish, 42)) this.hit(this.fish, 5, dmg, p.id, p.x, p.y);
-    for (const w of this.wilds) if (test(w, 8)) this.hit(w, 6, dmg, p.id, p.x, p.y);
+  // ビッグアロー: 太い光線が 0.6 秒残って 6 回ヒット(防御特化以外はほぼ確殺)
+  fireArrow(p, first) {
+    const B = p.beam, ca = Math.cos(B.a), sa = Math.sin(B.a), half = 26, dmg = 46 * p.sa;
+    if (first) this.fx('beam', B.x, B.y, Math.round(B.a * 1000));
+    const test = (o, r) => { const dx = o.x - B.x, dy = o.y - B.y, along = dx * ca + dy * sa; if (along < 0) return false; const perp = Math.abs(-dx * sa + dy * ca); return perp < half + r; };
+    for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, B.x, B.y);
+    for (const e of this.enemies) if (test(e, 6)) this.hit(e, 2, dmg, p.id, B.x, B.y);
+    for (const c of this.chests) if (test(c, 9)) this.hit(c, 3, dmg, p.id, B.x, B.y);
+    if (this.boss && test(this.boss, 38)) this.hit(this.boss, 4, dmg, p.id, B.x, B.y);
+    if (this.fish && test(this.fish, 42)) this.hit(this.fish, 5, dmg, p.id, B.x, B.y);
+    for (const w of this.wilds) if (test(w, 8)) this.hit(w, 6, dmg, p.id, B.x, B.y);
   }
   // 範囲内の全ターゲットに対して
   forTargets(x, y, r, fn) {
@@ -232,11 +235,11 @@ class Game {
     if (p.dead > 0 || p.out || p.inv > 0 || p.buf.bar > 0) return;
     if (this.phase === 'battle' && (this.count > 0 || this.over)) return;
     if (this.phase !== 'train' && this.phase !== 'battle') return;
-    const d = trueDmg ? raw : raw / p.sd;
+    const d = trueDmg ? raw : raw / p.sd / HP_SCALE;
     p.hp -= d; p.flash = .12; if (src >= 0) { p.lastAtk = src; p.lastAtkT = this.elapsed; }
     if (d > 1.5) this.fx('hurt', p.x, p.y, p.id, Math.min(99, Math.round(d)));
-    if (this.phase === 'train') { p.dmgAcc += d; while (p.dmgAcc >= 34) { p.dmgAcc -= 34; this.shed(p, 1); } }
-    if (partsN(p) > 0 && Math.random() < d / 55) { const k = pick([0, 1, 2].filter(i => p.parts[i] > 0)); p.parts[k]--; this.scatter(p.x, p.y, [PK_PART + k], 80); this.note(p, 'パーツを落とした!', '#ff4d4d'); }
+    if (this.phase === 'train') { p.dmgAcc += d; while (p.dmgAcc >= 25) { p.dmgAcc -= 25; this.shed(p, 1); } }
+    if (partsN(p) > 0 && Math.random() < d / 55) { const held = []; for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) if (p.parts[k] & (1 << i)) held.push([k, i]); const [k, i] = pick(held); p.parts[k] &= ~(1 << i); this.scatter(p.x, p.y, [PK_PART + k * 3 + i], 80); this.note(p, 'パーツを落とした!', '#ff4d4d', 'x'); }
     if (p.hp <= 0) {
       let killer = src;
       if (killer < 0 && p.lastAtk >= 0 && this.elapsed - p.lastAtkT < 5) killer = p.lastAtk;
@@ -256,15 +259,15 @@ class Game {
     if (K && K !== p) { K.kills++; this.note(K, p.name + ' を撃破!', '#ffe14d'); }
     // パーツ・鍵・アイテムは確定ドロップ
     const drops = [];
-    for (let k = 0; k < 3; k++) for (let i = 0; i < p.parts[k]; i++) drops.push(PK_PART + k); p.parts = [0, 0, 0];
+    for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) if (p.parts[k] & (1 << i)) drops.push(PK_PART + k * 3 + i); p.parts = [0, 0, 0];
     if (p.key) { drops.push(PK_KEY); p.key = false; }
     for (const it of p.items) drops.push(PK_ITEM + ITEM_KEYS.indexOf(it.k)); p.items = [];
-    p.arw = null; p.buf.jet = p.buf.dumb = p.buf.glass = p.buf.bar = 0;
+    p.arw = null; p.beam = null; p.buf.jet = p.buf.dumb = p.buf.glass = p.buf.bar = 0;
     if (this.phase === 'train') {
-      const tot = this.totalSt(p), lose = Math.ceil(tot * .25);
+      const tot = this.totalSt(p), lose = Math.ceil(tot * .35); // 1ブレイクは重い
       const removed = [];
       for (let i = 0; i < lose; i++) { const have = [0, 1, 2, 3].filter(k => p.st[k] > 0); if (!have.length) break; const k = pick(have); p.st[k]--; removed.push(k); }
-      const gain = K && K !== p && K.dead <= 0 ? Math.floor(removed.length * .4) : 0;
+      const gain = K && K !== p ? Math.floor(removed.length / 2) : 0; // どんなに遠くても半分は倒した人へ
       if (gain) this.give(K, removed.splice(0, gain), p.x, p.y);
       this.scatter(p.x, p.y, removed.concat(drops), 120);
       p.dead = RESPAWN_T; p.dmgAcc = 0;
@@ -285,7 +288,10 @@ class Game {
       const st = T.drop < 0 ? rndi(0, 3) : T.drop; const codes = [st];
       if (Math.random() < .15) codes.push(T.drop < 0 ? rndi(0, 3) : st);
       if (Math.random() < .05) codes.push(this.rollItem(false));
-      this.scatter(e.x, e.y, codes, 50);
+      // 倒した人(どんなに遠くても)がドロップの半分を受け取る
+      const P = src >= 0 ? this.players[src] : null;
+      if (P && !P.out) { const n = Math.floor((codes.length + 1) / 2); this.give(P, codes.splice(0, n), e.x, e.y); }
+      if (codes.length) this.scatter(e.x, e.y, codes, 50);
     }
   }
   damageChest(c, dmg, src) {
@@ -316,7 +322,8 @@ class Game {
     const got = [0, 0, 0, 0];
     for (let i = 0; i < gain; i++) { const w = M.mul.map(v => v * v * v); let r = Math.random() * w.reduce((a, b) => a + b); let k = 0; while ((r -= w[k]) > 0) k++; got[k] += this.addStat(p, k); }
     this.fx('mexp', p.x, p.y, p.m);
-    if (gain) this.note(p, '乗り換えボーナス ' + got.map((v, i) => v ? STAT_SHORT[i] + '+' + v : '').filter(Boolean).join(' '), '#ffe14d');
+    for (let k = 0; k < 4; k++) for (let j = 0; j < got[k]; j++) this.note(p, '', STAT_COL[k], 's' + k); // 乗り換えボーナスはアイコンでドンと出す
+    if (gain) this.fx('rideBonus', p.x, p.y, gain, p.id);
     p.x = fm.x; p.y = fm.y; p.m = fm.m; p.hp = 100; p.ride = 0; p.inv = Math.max(p.inv, .6); p.vx = p.vy = 0;
     this.map.unstuck(p, 7);
     this.fx('ride', p.x, p.y, p.m, p.id);
@@ -329,21 +336,35 @@ class Game {
     return best;
   }
 
+  autoTarget(p) {
+    const S = SHOTS[MACHINES[p.m].shot], range = clamp(S.spd * S.life * p.sr * (S.k === 'boom' ? .5 : 1) * .95, 70, 300), R2 = range * range;
+    let best = null, bs = 1e18;
+    const cons = (o, w) => { const d = d2(o.x, o.y, p.x, p.y); if (d < R2 && d * w < bs) { bs = d * w; best = o; } };
+    for (const q of this.players) if (q !== p && !q.out && q.dead <= 0) cons(q, .5);
+    for (const e of this.enemies) cons(e, 1);
+    for (const c of this.chests) if (c.type !== 'L') cons(c, 1.4);
+    for (const w of this.wilds) if (!w.taken && w.stun <= 0) cons(w, 1);
+    if (this.boss) cons(this.boss, .7);
+    if (this.fish) cons(this.fish, .9);
+    return best;
+  }
   // ---------- 発射 ----------
   fire(p) {
     const S = SHOTS[MACHINES[p.m].shot];
     p.cd = S.rate;
     const big = MACHINES[p.m].big ? 9 : 6;
+    const M = MACHINES[p.m], base = (p.aim ?? p.a) + (S.sweep ? Math.sin(this.elapsed * 7) * .5 : 0); // スプレッダーは首振り撃ち
+    if (M.mv === 'recoil') { p.vx -= Math.cos(base) * 150; p.vy -= Math.sin(base) * 150; } // スキャッターは反動で下がる
     for (let i = 0; i < S.n; i++) {
-      let a = p.a;
+      let a = base;
       if (S.n > 1 && S.sp) a += (i / (S.n - 1) - .5) * S.sp * 2;
       if (S.jit) a += rnd(-S.jit, S.jit);
       const spd = S.spd * (S.varSpd ? rnd(.75, 1.1) : 1);
       let ox = 0, oy = 0; if (S.par) { const off = (i - (S.n - 1) / 2) * S.par * 2; ox = -Math.sin(a) * off; oy = Math.cos(a) * off; }
       const x = p.x + Math.cos(a) * big + ox, y = p.y + Math.sin(a) * big + oy;
-      this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life: S.life * p.sr, dmg: S.dmg * p.sa, r: S.r, k: S.k, col: S.col, own: p.id, pierce: S.pierce ? [] : null, ph: i, big: S.big || 0, tr: S.trail || 0, turn: S.turn });
+      this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life: S.life * p.sr, dmg: S.dmg * p.sa, r: S.r, k: S.k, col: S.col, own: p.id, pierce: S.pierce ? [] : null, ph: i, big: S.big || 0, tr: S.trail || 0, turn: S.turn, ric: S.ric || 0, acc: S.acc || 0 });
     }
-    this.fx('shot', p.x, p.y, S.big ? 1 : 0, Math.round(p.a * 100));
+    this.fx('shot', p.x, p.y, S.big ? 1 : 0, Math.round(base * 100));
   }
   enemyShot(x, y, a, spd, dmg, own, col = 15, r = 3, life = 1.6) {
     this.bullets.push({ x, y, bx: x, by: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, ang: a, spd, t: 0, life, dmg, r, k: 'b', col, own, pierce: null, ph: 0, big: r > 3 ? 1 : 0, tr: 0 });
@@ -407,6 +428,7 @@ class Game {
       p.pmask = p.mask; return;
     }
     p.inv = Math.max(0, p.inv - dt); p.cd -= dt; p.ride += dt;
+    if (p.beam) { p.beam.t += dt; if (p.beam.t >= .1) { p.beam.t = 0; this.fireArrow(p); if (--p.beam.n <= 0) p.beam = null; } }
     for (const k in p.buf) p.buf[k] = Math.max(0, p.buf[k] - dt);
     if (MACHINES[p.m].legend && p.hp < 100) p.hp = Math.min(100, p.hp + 1.2 * dt);
     const frozen = this.phase === 'battle' && (this.count > 0 || this.over);
@@ -421,16 +443,14 @@ class Game {
       if (p.arw.t > 0) {
         p.arw.t -= dt; if (dir !== null) p.arw.a += clamp(angDiff(p.arw.a, dir), -1.3 * dt, 1.3 * dt);
         p.a = p.arw.a;
-      } else { p.arw.lock -= dt; if (p.arw.lock <= 0) { this.fireArrow(p); p.arw = null; } }
+      } else { p.arw.lock -= dt; if (p.arw.lock <= 0) { p.beam = { a: p.arw.a, x: p.x, y: p.y, n: 6, t: 0 }; this.fireArrow(p, true); p.beam.n--; p.arw = null; } }
       return;
     }
     // 向き・移動
-    if (dir !== null) p.a += clamp(angDiff(p.a, dir), -12 * dt, 12 * dt);
-    const maxS = Math.min(460, 108 * p.ss);
-    let tgt = 0; if (z) tgt = maxS; else if (dir !== null) tgt = maxS * .62;
-    const k = Math.min(1, dt * (tgt > 0 ? 7 : 3.5));
-    p.vx += (Math.cos(p.a) * tgt - p.vx) * k; p.vy += (Math.sin(p.a) * tgt - p.vy) * k;
-    this.map.move(p, p.vx * dt, p.vy * dt, r);
+    stepMachine(p, dir, z, dt, this.map, p.ss);
+    // オートエイム: 近くの敵・宝箱・プレイヤーに自動で向く(移動方向とは別)
+    if ((this.tick + p.id) % 4 === 0) p.aimTg = this.autoTarget(p);
+    const at = p.aimTg; p.aim = at && (at.hp > 0 || at.stun !== undefined) && !at.out && !(at.dead > 0) ? Math.atan2(at.y - p.y, at.x - p.x) : p.a;
     // 床・ゾーン
     if (this.phase === 'battle' && this.map.tileAt(p.x, p.y) === 8) this.damagePlayer(p, 10 * dt, -1, true);
     if (this.zone && this.count <= 0 && d2(p.x, p.y, this.zone.x, this.zone.y) > this.zone.r * this.zone.r) this.damagePlayer(p, 9 * dt, -1, true);
@@ -447,8 +467,11 @@ class Game {
       else if (xUp) { p.xHold = -1; this.useItem(p); }
     }
     // 他プレイヤーとの押し合い
+    // 体当たり(重戦車・突進中)は当たった相手と雑魚にダメージ
+    const mv = MACHINES[p.m].mv, ram = (mv === 'tank' || (mv === 'dash' && p.dashT > 0)) && Math.hypot(p.vx, p.vy) > 55, rr = MACHINES[p.m].big ? 18 : 14;
     this.grid.each(p.x, p.y, o => {
       if (o._k === 1 && o !== p) { const dd = d2(o.x, o.y, p.x, p.y); if (dd < 144 && dd > .01) { const d = Math.sqrt(dd), push = (12 - d) * .5; p.x -= (o.x - p.x) / d * push; p.y -= (o.y - p.y) / d * push; } }
+      if (ram && (o._k === 1 || o._k === 2) && o !== p && !(o.ramT > this.elapsed) && d2(o.x, o.y, p.x, p.y) < rr * rr) { o.ramT = this.elapsed + .5; this.hit(o, o._k, (mv === 'tank' ? 16 : 13) * p.sa, p.id, p.x, p.y); this.fx('ram', o.x, o.y, p.m); const a = Math.atan2(o.y - p.y, o.x - p.x); o.vx = Math.cos(a) * 240; o.vy = Math.sin(a) * 240; }
     });
     // 鍵付き宝箱
     if (p.key) for (const c of this.chests) if (c.type === 'L' && d2(c.x, c.y, p.x, p.y) < 22 * 22) { p.key = false; this.openChest(c, p.id); this.gfxEv('unlock', p.id); break; }
@@ -470,8 +493,11 @@ class Game {
         } else if (b.k === 'boom') {
           const f = Math.cos(b.t / b.life * Math.PI); b.x += b.vx * f * dt; b.y += b.vy * f * dt;
           if (b.t > b.life * .5 && b.own >= 0) { const o = this.players[b.own]; if (o && d2(o.x, o.y, b.x, b.y) < 100) alive = false; }
-        } else { b.x += b.vx * dt; b.y += b.vy * dt; }
-        if (alive && b.k !== 'boom' && map.solid(b.x, b.y)) { alive = false; this.fx('spark', b.x, b.y, b.col); }
+        } else { if (b.acc && b.t < .3) { const f = 1 + 2.2 * dt; b.vx *= f; b.vy *= f; } b.x += b.vx * dt; b.y += b.vy * dt; }
+        if (alive && b.k !== 'boom' && map.solid(b.x, b.y)) {
+          if (b.ric > 0) { b.ric--; b.x -= b.vx * dt; b.y -= b.vy * dt; if (map.solid(b.x + b.vx * dt, b.y)) b.vx = -b.vx; else b.vy = -b.vy; b.ang = Math.atan2(b.vy, b.vx); this.fx('spark', b.x, b.y, b.col); } // 跳弾
+          else { alive = false; this.fx('spark', b.x, b.y, b.col); }
+        }
         if (alive && b.k === 'boom' && map.solid(b.x, b.y)) { b.vx *= -1; b.vy *= -1; }
       }
       if (alive) alive = this.bulletHits(b);
@@ -528,7 +554,7 @@ class Game {
         case 'shoot': {
           const want = tg ? (dist > 120 ? 1 : dist < 80 ? -1 : 0) : .5; const a = tg ? ta : e.dir;
           e.vx = lerp(e.vx, Math.cos(a) * spd * want + Math.cos(a + 1.57) * spd * .5 * Math.sin(e.t), .05); e.vy = lerp(e.vy, Math.sin(a) * spd * want + Math.sin(a + 1.57) * spd * .5 * Math.sin(e.t), .05);
-          if (tg && dist < 170 && e.cd <= 0) { e.cd = SHOTS.enemy.rate + Math.random(); this.enemyShot(e.x, e.y, ta, 110, 3.5 * (e.pw || 1), -1); }
+          if (tg && dist < 170 && e.cd <= 0) { e.cd = 2.8 + Math.random() * 1.6; this.enemyShot(e.x, e.y, ta, 72, 2.2 * (e.pw || 1), -1, 15, 2, 2.2); }
         } break;
         case 'flee': { const a = tg ? ta + Math.PI + Math.sin(e.t * 4) * .6 : e.dir; if ((e.t % .5) < dt) { e.vx = Math.cos(a) * spd; e.vy = Math.sin(a) * spd; } e.vx *= .97; e.vy *= .97; } break;
       }

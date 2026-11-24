@@ -41,14 +41,14 @@ const MACHINES = [
   { name: 'スタンダード', tpl: 'wing', col: '#4d7cff', acc: '#ffd23f', mul: [1.05, 1.05, 1.05, 1.05], shot: 'twin', desc: 'バランス型・2連ショット' },
   { name: 'ジェットスター', tpl: 'dart', col: '#3dd8ff', acc: '#ffffff', mul: [.9, 1.45, .7, 1.0], shot: 'rapid', desc: '超高速・連射' },
   { name: 'フォートレス', tpl: 'tank', col: '#7a8a5a', acc: '#ffb43d', mul: [1.1, .7, 1.55, .9], shot: 'heavy', desc: '鉄壁・重砲弾' },
-  { name: 'スナイパー', tpl: 'dart', col: '#5a4dff', acc: '#ff3dd8', mul: [1.2, .85, .75, 1.6], shot: 'sniper', desc: '超遠距離・高速弾(当てにくい)' },
+  { name: 'スナイパー', tpl: 'rifle', col: '#5a4dff', acc: '#ff3dd8', mul: [1.2, .85, .75, 1.6], shot: 'sniper', desc: '超遠距離・高速弾(当てにくい)' },
   { name: 'スラッシャー', tpl: 'blade', col: '#ff4d4d', acc: '#ffffff', mul: [1.45, 1.2, .9, .5], shot: 'blade', desc: '超近接・斬撃波' },
   { name: 'ホーミー', tpl: 'saucer', col: '#c86bff', acc: '#ffe0ff', mul: [.95, 1.0, .95, 1.15], shot: 'homing', desc: '追尾ミサイル(当てやすい)' },
-  { name: 'ウェーブライダー', tpl: 'wing', col: '#2ec4a0', acc: '#e0fff8', mul: [1.1, 1.1, .9, 1.1], shot: 'wave', desc: 'うねる2重螺旋弾' },
-  { name: 'ブーメラン', tpl: 'blade', col: '#ffb43d', acc: '#7a3d00', mul: [1.15, 1.1, 1.0, .9], shot: 'boomer', desc: '戻ってくる貫通弾' },
-  { name: 'スキャッター', tpl: 'tank', col: '#ff8a8a', acc: '#ffffff', mul: [1.25, .95, 1.1, .6], shot: 'scatter', desc: '近距離散弾' },
-  { name: 'レーザーレイ', tpl: 'saucer', col: '#3d9bff', acc: '#e8fbff', mul: [1.1, .9, .85, 1.35], shot: 'laser', desc: '貫通レーザー' },
-  { name: 'スプレッダー', tpl: 'mini', col: '#9be03d', acc: '#2e4d00', mul: [1.1, 1.0, 1.0, .95], shot: 'spread3', desc: '3way ショット' },
+  { name: 'ウェーブライダー', tpl: 'manta', col: '#2ec4a0', acc: '#e0fff8', mul: [1.1, 1.1, .9, 1.1], shot: 'wave', desc: 'うねる2重螺旋弾' },
+  { name: 'ブーメラン', tpl: 'boomer', col: '#ffb43d', acc: '#7a3d00', mul: [1.15, 1.1, 1.0, .9], shot: 'boomer', desc: '戻ってくる貫通弾' },
+  { name: 'スキャッター', tpl: 'crab', col: '#ff8a8a', acc: '#ffffff', mul: [1.25, .95, 1.1, .6], shot: 'scatter', desc: '近距離散弾' },
+  { name: 'レーザーレイ', tpl: 'prism', col: '#3d9bff', acc: '#e8fbff', mul: [1.1, .9, .85, 1.35], shot: 'laser', desc: '貫通レーザー' },
+  { name: 'スプレッダー', tpl: 'trident', col: '#9be03d', acc: '#2e4d00', mul: [1.1, 1.0, 1.0, .95], shot: 'spread3', desc: '3way ショット' },
   // ---- レジェンダリー (微リジェネ付き) ----
   { name: 'フェニックス', tpl: 'phoenix', col: '#ff6a00', acc: '#ffe14d', mul: [1.55, 1.55, .95, .85], shot: 'phoenix', legend: 1, desc: '伝説・近接火炎' },
   { name: 'リヴァイアサン', tpl: 'levia', col: '#2e7bff', acc: '#9ae8ff', mul: [1.55, .95, .95, 1.75], shot: 'levia', legend: 1, desc: '伝説・超射程水流' },
@@ -63,7 +63,7 @@ for (const k in SHOTS) { const S = SHOTS[k]; S.spd *= 1.3; S.life *= .88; S.rate
 const BALANCE = {
   1: [1.15, 1.15, 1.15, 1.15], // スタンダード: 全部ちょっと得意を伸ばす
   2: [.81, 2.6, .43, 1],       // ジェットスター: スピードを伸ばす + 連射・弾の威力UP
-  3: [1.4, .32, 2.2, .4],      // フォートレス: アタック・ディフェンスと砲弾威力を伸ばす(スピード・レンジ・連射は苦手のまま)
+  3: [1.4, .55, 2.2, .4],      // フォートレス(遅すぎたのでスピードを少し戻した): アタック・ディフェンスと砲弾威力を伸ばす(スピード・レンジ・連射は苦手のまま)
   4: [1.8, .65, .45, 2.4],     // スナイパー: スピード・ディフェンスをさらに苦手に + 一発の威力UP
   5: [1.85, 1.38, .38, .2],    // スラッシャー: ディフェンス・レンジ(斬撃の届く範囲)をさらに苦手に
   6: [.9, 1, .9, 2.4],         // ホーミー: レンジを伸ばす + 追尾性能・弾速・威力UP
@@ -82,6 +82,16 @@ SHOTS.heavy.rate *= 1.35; SHOTS.heavy.spd *= .8; SHOTS.heavy.dmg = 18;
 SHOTS.sniper.dmg = 31; SHOTS.laser.dmg = 13; SHOTS.levia.dmg = 15; SHOTS.blade.r = 6;
 SHOTS.homing.turn = 12; SHOTS.homing.spd *= 1.25; SHOTS.homing.dmg = 14.5;
 SHOTS.cerb.spd *= .75; SHOTS.cerb.rate *= 1.4;
+// ---- ステータス以外の個性(移動方法・弾) ----
+const TRAITS = {
+  0: ['normal', 'クセのない操作'], 1: ['normal', 'クセのない操作・2連ショット'], 2: ['slide', '超すべる! 止まりにくいが最速'],
+  3: ['tank', '重戦車: 旋回が遅い・体当たりで攻撃'], 4: ['brake', 'ピタッと止まる・撃った弾が加速する'], 5: ['dash', 'Z長押しで一定間隔に突進・突進で体当たり'],
+  6: ['hover', 'ふわふわ浮遊・追尾ミサイル'], 7: ['zigzag', 'ジグザグに蛇行して避ける'], 8: ['bounce', '壁でバウンドするピンボール機体'],
+  9: ['recoil', '撃つと反動で下がる・弾が壁で跳ねる'], 10: ['rail', '8方向にカクッと曲がる・貫通レーザー'], 11: ['drift', '首振りしながら3way連射'],
+  12: ['dash', '炎の突進! 突進で体当たり'], 13: ['swim', 'うねって泳ぐ・星の川で超加速'], 14: ['tank', '重戦車・体当たり・体が大きい'],
+};
+for (const i in TRAITS) { MACHINES[i].mv = TRAITS[i][0]; MACHINES[i].trait = TRAITS[i][1]; }
+SHOTS.spread3.sweep = 1; SHOTS.scatter.ric = 1; SHOTS.sniper.acc = 1; // 弾の個性: 首振り / 跳弾 / 加速
 MACHINES.forEach(M => { M.best = M.mul.indexOf(Math.max(...M.mul)); });
 const LEGEND_IDS = [12, 13, 14];
 const NORMAL_SPAWN = [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11];
@@ -99,7 +109,7 @@ const ITEMS = {
   bar: { name: 'バリア', rar: 'R', icon: 'bar', dur: 6, desc: '一定時間無敵' },
   bbomb: { name: 'ビッグボム', rar: 'R', icon: 'bomb', desc: '周囲を大爆発' },
   sword: { name: 'ビッグソード', rar: 'R', icon: 'sword', uses: 3, desc: '前方を斬る(3回)' },
-  arrow: { name: 'ビッグアロー', rar: 'R', icon: 'arrow', desc: '7秒チャージ→無限射程の巨大矢' },
+  arrow: { name: 'ビッグアロー', rar: 'R', icon: 'arrow', desc: '5秒チャージ→無限射程の極太ビーム。多段ヒットで大ダメージ' },
   tv: { name: '番組表', rar: 'SR', icon: 'tv', desc: 'この試合のイベント予定が見える' },
   part: { name: 'レジェンドパーツ', rar: 'SR', icon: 'part', desc: '3つ集めると伝説マシン' },
 };
@@ -109,16 +119,19 @@ const R_ITEMS = ['jet', 'dumb', 'glass', 'bar', 'bbomb', 'sword', 'arrow'];
 const R_WEIGHT = { jet: 3, dumb: 3, glass: 3, bar: 2, bbomb: 2, sword: 2, arrow: 1 };
 const RAR_COL = { N: '#8fd16a', R: '#4da6ff', SR: '#ffcc33' };
 // ピックアップ種別コード: 0-3=ステータス, 10+i=アイテム, 50=パーツ, 60=鍵
-const PK_ITEM = 10, PK_PART = 50, PK_KEY = 60; // パーツは 50+種類(0..2)
-const isPart = k => k >= PK_PART && k < PK_PART + 3;
-const partsN = p => p.parts[0] + p.parts[1] + p.parts[2];
+const PK_ITEM = 10, PK_PART = 50, PK_KEY = 60; // パーツは 50 + 種類*3 + 部位(0=左翼 1=右翼 2=頭首)
+const isPart = k => k >= PK_PART && k < PK_PART + 9;
+const bits3 = m => (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1);
+const partsN = p => bits3(p.parts[0]) + bits3(p.parts[1]) + bits3(p.parts[2]);
+const PART_NAME = ['左翼', '右翼', '頭首'];
+const HP_SCALE = 2; // 内部の最大体力は 200(表示は%)
 
 // ---- 雑魚敵 ----
 const ENEMIES_BASE = [
-  { name: 'ツノスライム', spr: 'slime', hp: 22, spd: 34, drop: 0, r: 6, touch: 4, beh: 'hop' },
-  { name: 'ハヤブサ', spr: 'bird', hp: 14, spd: 70, drop: 1, r: 6, touch: 3, beh: 'fly' },
-  { name: 'カメタンク', spr: 'turtle', hp: 46, spd: 18, drop: 2, r: 7, touch: 5, beh: 'walk' },
-  { name: 'メダマン', spr: 'eye', hp: 18, spd: 28, drop: 3, r: 6, touch: 3, beh: 'shoot' },
+  { name: 'ツノスライム', spr: 'slime', hp: 22, spd: 34, drop: 0, r: 6, touch: 2.5, beh: 'hop' },
+  { name: 'ハヤブサ', spr: 'bird', hp: 14, spd: 70, drop: 1, r: 6, touch: 2, beh: 'fly' },
+  { name: 'カメタンク', spr: 'turtle', hp: 46, spd: 18, drop: 2, r: 7, touch: 3, beh: 'walk' },
+  { name: 'メダマン', spr: 'eye', hp: 18, spd: 28, drop: 3, r: 6, touch: 2, beh: 'shoot' },
   { name: 'スピードラビット', spr: 'rabbit', hp: 12, spd: 120, drop: -1, r: 6, touch: 3, beh: 'flee' },
 ];
 const ENEMIES = ENEMIES_BASE.map(e => Object.assign({}, e, { spd: e.spd * .85 })); // 足は遅め
@@ -133,6 +146,12 @@ const MTPL = {
   wing: { m: 1, rows: ['...ddd.......', '...daad......', '....dbbd.....', '....dbbbd....', '..edbhhbbd...', '..ebbhcchbbd.', '..ebbhcccbbba'] },
   tank: { m: 1, rows: ['ddddddddd....', 'daaaaaaad....', 'dbbbbbbbbd...', 'ebbhhhhbbbd..', 'ebbhccchbbbbb', 'ebbhcccchbbbb', 'ebbhcccchbaaa'] },
   saucer: { m: 1, rows: ['.....ddd.....', '...ddaaadd...', '..dabbbbbad..', '.dabbhhhbbad.', '.abbhcccbbba.', 'dabhcccccbbad', 'abbhcccccbbba'] },
+  rifle: { m: 1, rows: ['....dd.........', '...dbbd........', '..dbhhbd.......', 'edbbhcchbbbd...', 'ebbbhccchbbbaaa'] },
+  manta: { m: 1, rows: ['dd.............', '.ddd...........', '..dbbd.........', '..dbbbbd.......', '...dbhhbbd.....', '....dbhccbbd...', '....ebhcccbbba.'] },
+  crab: { m: 1, rows: ['......aaa....', '.....a...a...', '...ddbbd..a..', '..dbbbbbd....', 'edbhhhbbbd...', 'ebbhccbbbbaa.', 'ebbhcccbbbbb.'] },
+  prism: { m: 1, rows: ['......d......', '.....dhd.....', '....dhhbd....', '...dhbbbbd...', '..ehbbccbbd..', '.ehbbcccbbbd.', 'ehbbbcccbbbba'] },
+  boomer: { m: 1, rows: ['aa...........', 'daa..........', '.dbb.........', '..dbb........', '...dbbh......', '...edbhcch...', '....ebhcccbba'] },
+  trident: { m: 1, rows: ['........aaaa.', '......dbb....', '.....dbb.....', '..eddbbbhaaaa', '..ebbbhcc....', '..ebbhcccbbba'] },
   blade: { m: 1, rows: ['....aaa......', '.....aad.....', '....dbbad....', '...dbbbbad...', '..edbhhbbbd..', '.eebbhccbbbd.', '.eebbhcccbbaa'] },
   phoenix: { m: 1, rows: ['aa...............', '.aae.............', '..aaee...........', '...aabbe.........', '....abbbbh.......', '...eabbbbbhh.....', '..eeabbhhccbhh...', '.eeeabbhcccbbbbd.', 'eeeeabbhcccbbbbbw'] },
   levia: { m: 1, rows: ['.......ddd.......', '......daaad......', '.....dabbbad.....', 'aa..dabbbbbad....', '.aadbbbhhhbbbd...', '..abbbhhccchbbbd.', 'eabbbbhcccccbbbbw'] },
@@ -234,19 +253,28 @@ function buildBoss() {
   x.fillStyle = dark; x.fillRect(2, 30, 6, 10); x.fillRect(s - 8, 30, 6, 10);
   return c;
 }
-function buildFish() {
-  const w = 76, h = 40, c = mkCanvas(w, h), x = c.getContext('2d');
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-    const dx = i - 34, dy = j - h / 2; let inside = (dx * dx) / (30 * 30) + (dy * dy) / (17 * 17) <= 1;
-    const tail = i < 12 && Math.abs(dy) < (12 - i) * 1.4 + 2 && Math.abs(dy) > (12 - i) * .5 - 3;
-    if (inside || tail) {
-      const hue = ((i * 7 + j * 3) % 360);
-      const edge = !((dx - 1) * (dx - 1) / 900 + dy * dy / 289 <= .86) && inside;
-      x.fillStyle = edge ? '#0b0b18' : `hsl(${hue},90%,${55 + ((i + j) % 4 === 0 ? 15 : 0)}%)`; x.fillRect(i, j, 1, 1);
-    }
-  }
-  x.fillStyle = '#fff'; x.fillRect(52, 13, 6, 6); x.fillStyle = '#111'; x.fillRect(54, 14, 3, 4);
-  x.fillStyle = '#ffffff88'; for (let k = 0; k < 6; k++) x.fillRect(20 + k * 5, 10 + (k % 2) * 3, 2, 2);
+// レインボーフィッシュ: 金魚風。色ごとにフレームを描く(緑は濁らない黄緑)
+const FISH_COLS = ['#ff5a4d', '#ff9b3d', '#ffd23f', '#a8e83d', '#3dd8ff', '#4d8aff', '#b07aff', '#ff7ad9'];
+function buildGoldfish(col) {
+  const w = 84, h = 52, c = mkCanvas(w, h), x = c.getContext('2d'), lite = shade(col, .55), dark = shade(col, -.35);
+  // 尾びれ(ふわっと大きな2枚)
+  x.globalAlpha = .78; x.fillStyle = lite;
+  for (const s of [-1, 1]) { x.beginPath(); x.moveTo(32, 26); x.quadraticCurveTo(14, 26 + s * 4, 2, 26 + s * 22); x.quadraticCurveTo(10, 26 + s * 8, 4, 26 + s * 3); x.quadraticCurveTo(18, 26, 32, 26); x.fill(); }
+  x.strokeStyle = col; x.lineWidth = 1; for (let k = 0; k < 5; k++) { x.beginPath(); x.moveTo(30, 26); x.lineTo(4 + k, 6 + k * 10); x.stroke(); }
+  // 背びれ
+  x.fillStyle = lite; x.beginPath(); x.moveTo(36, 16); x.quadraticCurveTo(44, 2, 56, 12); x.lineTo(50, 16); x.fill();
+  x.globalAlpha = 1;
+  // 体
+  x.fillStyle = '#0b0b18'; x.beginPath(); x.ellipse(50, 26, 22, 14.5, 0, 0, TAU); x.fill();
+  const g = x.createLinearGradient(0, 12, 0, 40); g.addColorStop(0, dark); g.addColorStop(.45, col); g.addColorStop(1, lite);
+  x.fillStyle = g; x.beginPath(); x.ellipse(50, 26, 21, 13.5, 0, 0, TAU); x.fill();
+  // うろこ
+  x.strokeStyle = 'rgba(255,255,255,.45)'; for (let yy = 0; yy < 3; yy++) for (let xx = 0; xx < 4; xx++) { x.beginPath(); x.arc(38 + xx * 6 + (yy % 2) * 3, 20 + yy * 6, 3, -1.2, 1.2); x.stroke(); }
+  // 胸びれ・目・口
+  x.globalAlpha = .8; x.fillStyle = lite; x.beginPath(); x.ellipse(52, 36, 6, 3, .6, 0, TAU); x.fill(); x.globalAlpha = 1;
+  x.fillStyle = '#ffffff'; x.beginPath(); x.arc(62, 21, 4.5, 0, TAU); x.fill(); x.fillStyle = '#0b0b18'; x.beginPath(); x.arc(63, 21, 2.4, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.fillRect(63, 19, 1, 1);
+  x.fillStyle = dark; x.fillRect(70, 27, 2, 2);
+  x.fillStyle = 'rgba(255,255,255,.6)'; x.beginPath(); x.ellipse(46, 18, 8, 2.5, -.2, 0, TAU); x.fill();
   return c;
 }
 
@@ -264,11 +292,37 @@ function buildGFX() {
   GFX.patchBig = PATCH_SYM.map((s, i) => plateIcon(s, STAT_COL[i], '#fff', 11));
   GFX.item = {}; GFX.itemUI = {};
   for (const k of ITEM_KEYS) {
-    const it = ITEMS[k]; const bg = it.rar === 'N' ? '#3d8a3a' : it.rar === 'R' ? '#2e5ad8' : '#c88a00';
+    const it = ITEMS[k]; const sc = { jet: 1, dumb: 0, glass: 3, bar: 2 }[it.icon]; // 強化アイテムはステータスの色
+    const bg = sc !== undefined ? shade(STAT_COL[sc], -.25) : it.rar === 'N' ? '#3d8a3a' : it.rar === 'R' ? '#2e5ad8' : '#c88a00';
     GFX.item[k] = plateIcon(ICON_SYM[it.icon], bg, '#fff', it.rar === 'N' ? 9 : 11);
     GFX.itemUI[k] = plateIcon(ICON_SYM[it.icon], bg, '#fff', 11);
   }
   GFX.partCol = LEGEND_IDS.map(id => plateIcon(ICON_SYM.part, MACHINES[id].col, '#fff', 11, '#fff'));
+  // 伝説マシンを上向きにして 左翼 / 右翼 / 頭首 に分割(同じ大きさのキャンバスに部位だけ残す)
+  GFX.legendUp = []; GFX.legendPieces = []; GFX.pieceIcon = [];
+  LEGEND_IDS.forEach((id, li) => {
+    const src = GFX.machine[id], w = src.width, h = src.height, up = mkCanvas(h, w), ux = up.getContext('2d');
+    ux.translate(0, w); ux.rotate(-Math.PI / 2); ux.drawImage(src, 0, 0); GFX.legendUp[li] = up;
+    const pieces = [0, 1, 2].map(piece => {
+      const c = mkCanvas(h, w), x = c.getContext('2d'); x.drawImage(up, 0, 0);
+      x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000';
+      const headH = Math.round(w * .42); // 上側 42% が頭首、残りを左右に分ける
+      if (piece === 2) x.fillRect(0, 0, h, headH); else if (piece === 0) x.fillRect(0, headH, Math.floor(h / 2), w); else x.fillRect(Math.floor(h / 2), headH, h, w);
+      return c;
+    });
+    GFX.legendPieces[li] = pieces;
+    GFX.pieceIcon[li] = pieces.map(pc => { // 拾う時のアイコン(部位だけを切り抜き、光る台座付き)
+      const d = pc.getContext('2d').getImageData(0, 0, pc.width, pc.height).data; let x0 = 99, y0 = 99, x1 = -1, y1 = -1;
+      for (let y = 0; y < pc.height; y++) for (let x = 0; x < pc.width; x++) if (d[(y * pc.width + x) * 4 + 3]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1, S = Math.max(bw, bh) + 6, c = mkCanvas(S, S), x = c.getContext('2d');
+      x.fillStyle = '#0b0b18'; x.beginPath(); x.arc(S / 2, S / 2, S / 2, 0, TAU); x.fill(); x.fillStyle = MACHINES[id].col; x.beginPath(); x.arc(S / 2, S / 2, S / 2 - 1, 0, TAU); x.fill();
+      x.fillStyle = shade(MACHINES[id].col, -.4); x.beginPath(); x.arc(S / 2, S / 2, S / 2 - 2.5, 0, TAU); x.fill();
+      x.drawImage(pc, x0, y0, bw, bh, Math.floor((S - bw) / 2), Math.floor((S - bh) / 2), bw, bh); return c;
+    });
+  });
+  GFX.skull = pixArt(['.wwwwwww.', 'wwwwwwwww', 'wkkwwwkkw', 'wkkwwwkkw', 'wwwwkwwww', '.wwwwwww.', '..wkwkw..'], { w: '#f4f4f8', k: '#0b0b18' });
+  GFX.crown = pixArt(['y...y...y', 'yy.yyy.yy', 'yyyyyyyyy', 'yrryyybyy', 'yyyyyyyyy'], { y: '#ffd23f', r: '#ff4d6d', b: '#4dc3ff' });
+  GFX.clock = pixArt(['..www..', '.wkwkw.', 'wkkwkkw', 'wkkwwww', 'wkkkkkw', '.wkkkw.', '..www..'], { w: '#ffffff', k: '#3a3a6a' });
   GFX.key = pixArt(['.yy......', 'y..yyyyyy', 'y..y..y.y', '.yy......'], { y: '#ffe14d' });
   GFX.chestB = buildChest(14, 11, '#8a5a2e', '#5a5a6a', '#c8c8d8', '#fff', false);
   GFX.chestA = buildChest(18, 14, '#c8323a', '#ffcc33', '#ffe14d', '#3dffe0', true);
@@ -280,7 +334,7 @@ function buildGFX() {
   GFX.ore = hueFrames(oreBig, 8);
   GFX.chestW = { B: silhouette(GFX.chestB), A: silhouette(GFX.chestA), G: silhouette(GFX.chestG), L: silhouette(GFX.chestL), I: silhouette(GFX.chestI), O: silhouette(oreBig) };
   GFX.boss = buildBoss(); GFX.bossW = silhouette(GFX.boss); GFX.bossD = damageSet(GFX.boss, 90);
-  GFX.fish = hueFrames(buildFish(), 8); GFX.fishW = silhouette(GFX.fish[0]); GFX.fishD = GFX.fish.map(s => damageSet(s, 91));
+  GFX.fish = FISH_COLS.map(buildGoldfish); GFX.fishW = silhouette(GFX.fish[0]); GFX.fishD = GFX.fish.map(s => damageSet(s, 91));
   GFX.chestD = { B: damageSet(GFX.chestB, 70), A: damageSet(GFX.chestA, 71), G: damageSet(GFX.chestG, 72), L: [GFX.chestL, GFX.chestL, GFX.chestL, GFX.chestL], I: damageSet(GFX.chestI, 73) };
   GFX.oreD = GFX.ore.map(s => damageSet(s, 74));
   GFX.balls = [

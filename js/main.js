@@ -88,7 +88,7 @@ function menuNav(n, dt) {
 }
 function hint(s) { txt(ctx, s, W / 2, H - 20, 14, '#aaa', 'center', 3); }
 
-const TITLE_ITEMS = ['CPU戦', 'フレンド戦: ルームを作る', 'フレンド戦: ルームに参加', 'あそびかた', 'せってい'];
+const TITLE_ITEMS = ['CPU戦', 'フレンド戦: ルームを作る', 'フレンド戦: ルームに参加', 'ずかん', 'あそびかた', 'せってい'];
 const Scenes = {
   title: {
     update(dt) {
@@ -98,13 +98,14 @@ const Scenes = {
         if (Scene.sel === 0) { go('setup'); Scene.mode = 'cpu'; }
         else if (Scene.sel === 1) { go('setup'); Scene.mode = 'host'; Net.onEvent = netEvent; Net.host(Settings.name); }
         else if (Scene.sel === 2) { go('join'); Scene.code = ''; Net.onEvent = netEvent; }
-        else if (Scene.sel === 3) go('howto');
+        else if (Scene.sel === 3) { go('zukan'); Scene.tab = 0; }
+        else if (Scene.sel === 4) go('howto');
         else go('settings');
       }
     },
     draw(dt) {
       drawStarfield(dt); drawFlyers(dt); drawLogo(130);
-      menuList(TITLE_ITEMS, W / 2, 270, Scene.sel);
+      menuList(TITLE_ITEMS, W / 2, 250, Scene.sel, 360, 42);
       hint('↑↓: 選択   Z: 決定   X: 戻る   M: ミュート');
     },
   },
@@ -189,12 +190,55 @@ const Scenes = {
       }
     },
   },
+  // ---- ずかん(マシン / イベント / アイテム) ----
+  zukan: {
+    tabs: ['マシン', 'イベント', 'アイテム'],
+    list(t) { return t === 0 ? MACHINES.map((_, i) => i) : t === 1 ? EVENT_KEYS : ITEM_KEYS.filter(k => k !== 'part').concat(['part']); },
+    update(dt) {
+      const L = this.list(Scene.tab); menuNav(L.length, dt);
+      if (Input.hit(IN.R)) { Scene.tab = (Scene.tab + 1) % 3; Scene.sel = 0; Sound.play('move'); }
+      if (Input.hit(IN.L)) { Scene.tab = (Scene.tab + 2) % 3; Scene.sel = 0; Sound.play('move'); }
+      if (Input.hit(IN.X) || Input.hit(IN.Z)) { Sound.play('back'); go('title'); }
+    },
+    draw(dt) {
+      drawStarfield(dt);
+      this.tabs.forEach((t, i) => { const on = i === Scene.tab, x = W / 2 + (i - 1) * 170; panel(ctx, x - 75, 14, 150, 40, on ? 'rgba(60,40,120,.9)' : 'rgba(20,20,50,.6)', on ? '#ffe14d' : '#3a3a6a'); txt(ctx, t, x, 34, 20, on ? '#ffe14d' : '#aaa', 'center', 3); });
+      const L = this.list(Scene.tab), sel = Scene.sel, top = clamp(sel - 6, 0, Math.max(0, L.length - 13));
+      for (let j = 0; j < Math.min(13, L.length); j++) {
+        const i = top + j, it = L[i], y = 84 + j * 33, on = i === sel;
+        panel(ctx, 30, y - 14, 300, 28, on ? 'rgba(60,40,120,.9)' : 'rgba(20,20,50,.5)', on ? '#ffe14d' : 'rgba(80,80,140,.4)');
+        let name, col = '#fff';
+        if (Scene.tab === 0) { name = MACHINES[it].name; col = MACHINES[it].legend ? '#ffe14d' : MACHINES[it].col; iconC(ctx, GFX.machine[it], 52, y, 1.5); }
+        else if (Scene.tab === 1) { name = EVENT_DEFS[it].short; col = EVENT_DEFS[it].col; }
+        else { name = ITEMS[it].name; col = RAR_COL[ITEMS[it].rar]; iconC(ctx, GFX.itemUI[it], 52, y, 1.6); }
+        txt(ctx, name, 76, y, 16, on ? col : '#bbb', 'left', 3);
+      }
+      const it = L[sel], x = 380; panel(ctx, x - 20, 70, 580, 430, 'rgba(12,12,36,.75)');
+      if (Scene.tab === 0) {
+        const M = MACHINES[it]; ctx.save(); ctx.translate(x + 90, 190); ctx.rotate(-Math.PI / 2 + Math.sin(time * 2) * .1); const img = GFX.machine[it], s = 7; ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
+        txt(ctx, M.name, x + 200, 120, 34, M.legend ? '#ffe14d' : M.col, 'left', 5);
+        if (M.legend) txt(ctx, 'LEGENDARY', x + 200, 88, 16, '#ffe14d', 'left', 3);
+        txt(ctx, M.desc, x + 200, 160, 16, '#fff', 'left', 3);
+        wrapText(ctx, '移動: ' + (M.trait || ''), 330, 15).forEach((l, i) => txt(ctx, l, x + 200, 196 + i * 22, 15, '#8ad0ff', 'left', 3));
+        for (let i = 0; i < 4; i++) { const y = 300 + i * 42, mul = M.mul[i]; iconC(ctx, GFX.patchBig[i], x + 30, y, 2.5); txt(ctx, STAT_NAME[i], x + 60, y, 16, STAT_COL[i], 'left', 3); ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 180, y - 8, 300, 16); ctx.fillStyle = STAT_COL[i]; ctx.fillRect(x + 180, y - 8, 300 * clamp(mul / 2.6, 0, 1), 16); txt(ctx, 'x' + mul.toFixed(2) + (mul > 1 ? ' ▲' : mul < 1 ? ' ▼' : ''), x + 490, y, 15, mul > 1 ? '#5fe36a' : mul < 1 ? '#ff6b6b' : '#fff', 'left', 3); }
+        if (M.legend) txt(ctx, '左翼・右翼・頭首のパーツを3つ集めると完成', x + 10, 478, 14, '#ffe14d', 'left', 3);
+      } else if (Scene.tab === 1) {
+        const D = EVENT_DEFS[it]; txt(ctx, D.name, x + 10, 110, 34, D.col, 'left', 5); txt(ctx, D.major ? 'よく起きるイベント' : 'レアなイベント', x + 10, 152, 15, '#aaa', 'left', 3);
+        wrapText(ctx, D.desc, 520, 18).forEach((l, i) => txt(ctx, l, x + 10, 200 + i * 30, 18, '#fff', 'left', 3));
+      } else {
+        const I = ITEMS[it]; iconC(ctx, GFX.itemUI[it], x + 70, 170, 7); txt(ctx, I.name, x + 160, 140, 34, RAR_COL[I.rar], 'left', 5);
+        txt(ctx, { N: 'N: 拾うと自動で発動', R: 'R: 2つまで持てる。X で使う', SR: 'SR: とてもレア' }[I.rar], x + 160, 182, 15, '#aaa', 'left', 3);
+        wrapText(ctx, I.desc, 520, 18).forEach((l, i) => txt(ctx, l, x + 10, 270 + i * 30, 18, '#fff', 'left', 3));
+      }
+      hint('←→: タブ   ↑↓: 選択   X: 戻る');
+    },
+  },
   howto: {
     pages: [
-      ['操作方法', ['矢印キー : 移動 / 向きを変える', 'Z (押しっぱなし) : アクセル + ショット連射', '　→ Zを押すと向いている方向へ全速前進しながら撃つ', '　→ 矢印だけなら撃たずにゆっくり移動', 'X : マシンの近くなら乗り換え / それ以外はアイテム使用', 'X 長押し : アイテムスロットの入れ替え', 'M : ミュート    Esc : ポーズ(CPU戦)']],
+      ['操作方法', ['矢印キー : 移動 / 向きを変える', 'Z (押しっぱなし) : アクセル + ショット連射(近くの敵には自動で向いて撃つ)', '　→ Zを押すと向いている方向へ全速前進しながら撃つ', '　→ 矢印だけなら撃たずにゆっくり移動', 'X : マシンの近くなら乗り換え / それ以外はアイテム使用', 'X 長押し : アイテムスロットの入れ替え', 'M : ミュート    Esc : ポーズ(CPU戦)']],
       ['試合の流れ', ['① トレーニング : 制限時間内にマシンを強くしよう', '　・雑魚敵を倒す → ステータスアイテムが落ちる', '　・宝箱を壊す → ラストアタックした人が中身を総取り', '　・他のマシンに乗り換える → 乗っていた時間に応じてボーナス', '　・時々イベントが発生! 試合が大きく動く', '② バトル : ルーレットで選ばれた闘技場で制限時間まで戦う', '　・何度でも復活。やられるとデス+1、倒すとデス-1', '　・時間切れの時、デスが一番少ない人の勝ち!']],
-      ['ステータスとマシン', ['アタック : ショットの威力    スピード : 移動の速さ', 'ディフェンス : 受けるダメージを減らす    レンジ : 射程', 'マシンごとに得意(▲)・苦手(▼)なステータスがある', 'HPは100%固定。マシンは回復しない → 乗り換えで全回復!', 'ダメージを受けるとステータスがこぼれる。撃破されると大量に散らばり、', '倒した人が一部を吸い取る。十数秒後にミニノーマルで復活']],
-      ['アイテム', ['N(緑) 自動発動 : ミニジェット / ミニダンベル / ミニメガネ / ミニバリア / ミニボム', 'R(青) 2つまで所持、Xで使用 :', '　ジェット / ダンベル / メガネ / バリア / ビッグボム', '　ビッグソード(3回まで斬れる) / ビッグアロー(7秒チャージ→無限射程)', 'SR(金) : 番組表 = この試合のイベント予定が見える', '　レジェンドパーツ = 同じ種類を3つ集めると伝説マシンに変身!', '　(パーツは攻撃されると落とすことがある)']],
+      ['ステータスとマシン', ['アタック : ショットの威力    スピード : 移動の速さ', 'ディフェンス : 受けるダメージを減らす    レンジ : 射程', 'マシンごとに得意(▲)・苦手(▼)なステータスがある', 'マシンは回復しない → 乗り換えで全回復! マシンごとに移動方法もちがう', 'ダメージを受けるとステータスがこぼれる。撃破されると大量に散らばり、', '倒した人が一部を吸い取る。十数秒後にミニノーマルで復活']],
+      ['アイテム', ['N(緑) 自動発動 : ミニジェット / ミニダンベル / ミニメガネ / ミニバリア / ミニボム', 'R(青) 2つまで所持、Xで使用 :', '　ジェット / ダンベル / メガネ / バリア / ビッグボム', '　ビッグソード(3回まで斬れる) / ビッグアロー(5秒チャージ→極太ビーム)', 'SR(金) : 番組表 = この試合のイベント予定が見える', '　レジェンドパーツ = 左翼・右翼・頭首を集めると伝説マシンに変身!', '　(パーツは攻撃されると落とすことがある)']],
       ['イベント', ['巨大モンスター / 鍵付き宝箱 / 巨大隕石 / ゴールドラッシュ', 'レインボーフィッシュ / マシン襲来 / ハイスピード', 'フラワーラビリンス / モンスターラッシュ / ビッグボール', 'スケールダウン / ワープホール / スターシャワー', '発生すると画面上に告知、矢印で場所を案内、', 'ミニマップの下に説明が出る']],
     ],
     update(dt) {
@@ -236,7 +280,7 @@ const Scenes = {
       if (Scene.paused) { if (Input.hit(IN.Z)) { Scene.paused = false; endGame(); } if (Input.hit(IN.X)) Scene.paused = false; return; }
       const me = g.players[Render.meId];
       if (me && me.out && g.phase === 'battle' && Input.hit(IN.X)) cycleFollow(g);
-      if (g.phase === 'result' && Input.hit(IN.Z) && g.t < -1) { endGame(); return; }
+      if (g.phase === 'result' && Input.hit(IN.Z) && UI.resultDone) { endGame(); return; }
       // ヒットストップ: CPU戦では本当に時間を止める(オンラインは全員が止まるので見た目だけ)
       const stopped = FX.stopT > 0 && Net.role !== 'host';
       if (!stopped) this.acc += dt; let steps = 0;

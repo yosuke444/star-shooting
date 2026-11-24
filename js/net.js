@@ -88,7 +88,7 @@ const Net = {
   common(g) {
     const P = g.players.map(p => {
       const b = p.buf, fl = (p.dead > 0 ? 1 : 0) | (p.out ? 2 : 0) | (p.inv > 0 ? 4 : 0) | (p.flash > 0 ? 8 : 0) | (p.key ? 16 : 0) | (b.bar > 0 ? 32 : 0) | (b.jet > 0 ? 64 : 0) | (b.dumb > 0 ? 128 : 0) | (b.glass > 0 ? 256 : 0);
-      return [r1(p.x), r1(p.y), r1(p.a * 100), p.m, Math.ceil(p.hp), fl, p.parts[0] + p.parts[1] * 4 + p.parts[2] * 16, r1(p.vx), r1(p.vy), r1(p.dead * 10), p.arw ? r1(p.arw.a * 100) : null, p.arw ? r1(p.arw.t * 10) : 0, p.deaths, p.bk];
+      return [r1(p.x), r1(p.y), r1((p.aim ?? p.a) * 100), p.m, Math.ceil(p.hp), fl, p.parts[0] | (p.parts[1] << 3) | (p.parts[2] << 6), r1(p.vx), r1(p.vy), r1(p.dead * 10), p.arw ? r1(p.arw.a * 100) : null, p.arw ? r1(p.arw.t * 10) : 0, p.deaths, p.bk];
     });
     const c = g.evt && g.evt.cur;
     return {
@@ -100,7 +100,7 @@ const Net = {
       fi: g.fish ? [r1(g.fish.x), r1(g.fish.y), r1(g.fish.hp), r1(g.fish.mhp), r1(g.fish.a * 100), g.fish.flash > 0 ? 1 : 0] : null,
       ba: g.balls.map(b => [r1(b.x), r1(b.y), b.kind, r1(b.rot * 10), r1(b.vx), r1(b.vy)]),
       me: g.meteors.map(m => [m.id, r1(m.x), r1(m.y), r1(m.t * 100), r1(m.fall * 100), m.r, m.big, m.kind]),
-      wa: g.warps.map(w => [w.id, r1(w.x), r1(w.y), r1(w.x2), r1(w.y2)]),
+      wa: g.warps.map(w => [w.id, r1(w.x), r1(w.y), w.hue]),
       ev: c ? { ty: c.type, t: r1(c.t * 10), d: r1(c.dur), mk: c.marks, rg: c.region, sd: c.seed, st: r1(c.st) } : null,
       ei: g.evt.idx, en: g.evt.list.length, lo: g.legend.order,
       bnd: g.map.bnd ? [r1(g.map.bnd.x0), r1(g.map.bnd.y0), r1(g.map.bnd.x1), r1(g.map.bnd.y1)] : null,
@@ -183,7 +183,7 @@ class ClientView {
       p.m = a[3]; p.hp = a[4]; const fl = a[5];
       p.dead = fl & 1 ? Math.max(.01, a[9] / 10) : 0; p.out = !!(fl & 2); p.inv = fl & 4 ? 1 : 0; p.flash = fl & 8 ? .1 : 0; p.key = !!(fl & 16);
       p.buf.bar = fl & 32 ? 1 : 0; p.buf.jet = fl & 64 ? 1 : 0; p.buf.dumb = fl & 128 ? 1 : 0; p.buf.glass = fl & 256 ? 1 : 0;
-      p.parts = [a[6] & 3, (a[6] >> 2) & 3, (a[6] >> 4) & 3]; p.svx = a[7]; p.svy = a[8];
+      p.parts = [a[6] & 7, (a[6] >> 3) & 7, (a[6] >> 6) & 7]; p.aimT = a[2] / 100; p.svx = a[7]; p.svy = a[8];
       p.arw = a[10] !== null && a[10] !== undefined ? { a: a[10] / 100, t: a[11] / 10 } : null; p.deaths = a[12]; p.bk = a[13];
     });
     // 自分
@@ -212,7 +212,7 @@ class ClientView {
     this.fish = c.fi ? Object.assign(this.fish || { x: c.fi[0], y: c.fi[1] }, { tx: c.fi[0], ty: c.fi[1], hp: c.fi[2], mhp: c.fi[3], a: c.fi[4] / 100, flash: c.fi[5] ? .1 : 0 }) : null;
     this.balls = c.ba.map(a => ({ x: a[0], y: a[1], kind: a[2], rot: a[3] / 10, vx: a[4], vy: a[5] }));
     this.meteors = c.me.map(a => ({ id: a[0], x: a[1], y: a[2], t: a[3] / 100, fall: a[4] / 100, r: a[5], big: a[6], kind: a[7] }));
-    this.warps = c.wa.map(a => ({ id: a[0], x: a[1], y: a[2], x2: a[3], y2: a[4] }));
+    this.warps = c.wa.map(a => ({ id: a[0], x: a[1], y: a[2], hue: a[3] }));
     this.evt.cur = c.ev ? { type: c.ev.ty, t: c.ev.t / 10, dur: c.ev.d, marks: c.ev.mk, region: c.ev.rg, seed: c.ev.sd, st: c.ev.st } : null;
     this.evtIdx = c.ei; this.evtN = c.en; this.legendOrder = c.lo;
     // 迷路
@@ -227,10 +227,10 @@ class ClientView {
   update(dt, mask) {
     const k = 1 - Math.exp(-dt * 14);
     for (const p of this.players) {
-      if (p.id === this.you && !p.dead && !p.out && this.phase !== 'roulette' && this.phase !== 'result' && !p.arw) { this.predict(p, dt, mask); continue; }
+      if (p.id === this.you && !p.dead && !p.out && this.phase !== 'roulette' && this.phase !== 'result' && !p.arw) { this.predict(p, dt, mask); p.aim = (p.aim ?? p.a) + angDiff(p.aim ?? p.a, p.aimT ?? p.a) * k; continue; }
       p.pred = false;
       p.tx += (p.tvx || 0) * dt; p.ty += (p.tvy || 0) * dt;
-      p.x = lerp(p.x, p.tx, k); p.y = lerp(p.y, p.ty, k); p.a += angDiff(p.a, p.ta ?? p.a) * k; p.vx = p.svx; p.vy = p.svy;
+      p.x = lerp(p.x, p.tx, k); p.y = lerp(p.y, p.ty, k); p.a += angDiff(p.a, p.ta ?? p.a) * k; p.vx = p.svx; p.vy = p.svy; p.aim = p.a;
       if (p.arw) p.a = p.arw.a;
     }
     for (const b of this.bullets) { b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt; }
@@ -248,11 +248,7 @@ class ClientView {
     p.pred = true;
     const frozen = this.phase === 'battle' && this.count > 0; const m = frozen ? 0 : mask;
     const dir = maskDir(m), z = (m & IN.Z) !== 0;
-    if (dir !== null) p.a += clamp(angDiff(p.a, dir), -12 * dt, 12 * dt);
-    const maxS = Math.min(460, 108 * this.ss); let tgt = 0; if (z) tgt = maxS; else if (dir !== null) tgt = maxS * .62;
-    const kk = Math.min(1, dt * (tgt > 0 ? 7 : 3.5));
-    p.vx += (Math.cos(p.a) * tgt - p.vx) * kk; p.vy += (Math.sin(p.a) * tgt - p.vy) * kk;
-    this.map.move(p, p.vx * dt, p.vy * dt, MACHINES[p.m].big ? 8 : 6);
+    stepMachine(p, dir, z, dt, this.map, this.ss);
     // サーバー位置へ徐々に寄せる
     p.tx += (p.tvx || 0) * dt; p.ty += (p.tvy || 0) * dt;
     const dd = d2(p.x, p.y, p.tx, p.ty);

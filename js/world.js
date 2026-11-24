@@ -5,7 +5,7 @@
 // 非固体: 0草 1濃草 2土 3道 4花 5砂 6金属床 7金属床2 8溶岩(ダメージ) 9水晶床 11星床
 // 固体  : 20岩 21木 22金属壁 23水晶 24花壁 25柱 26場外(宇宙)
 const SOLID = 20;
-const TILE_MINI = { 0: '#0b0b26', 1: '#0e0e2e', 2: '#2e1a52', 3: '#16365a', 4: '#1c1c48', 5: '#123a48', 6: '#4a5068', 7: '#3e4458', 8: '#ff5a1a', 9: '#5a4a8a', 11: '#6a6a9a', 12: '#3a2a30', 20: '#8a7a6a', 21: '#4a5a72', 22: '#8a90a8', 23: '#c88aff', 24: '#ff7ad9', 25: '#a0a8c0', 26: '#05050f' };
+const TILE_MINI = { 13: '#3d7bff', 14: '#7a5aff', 15: '#ff9ccc', 16: '#3f9a3a', 18: '#d8b878', 19: '#b89a6a', 27: '#ff4d8a', 28: '#ffffff', 29: '#22222a', 30: '#ffd23f', 31: '#e8c08a', 32: '#3a3a44', 33: '#ff8ab0', 34: '#d8b070', 35: '#d89a4a', 36: '#ff9ccc', 37: '#ff9ccc', 38: '#2e8a3a', 39: '#3d9bff', 40: '#e8b82a', 0: '#0b0b26', 1: '#0e0e2e', 2: '#2e1a52', 3: '#16365a', 4: '#1c1c48', 5: '#123a48', 6: '#4a5068', 7: '#3e4458', 8: '#ff5a1a', 9: '#5a4a8a', 11: '#6a6a9a', 12: '#3a2a30', 20: '#8a7a6a', 21: '#4a5a72', 22: '#8a90a8', 23: '#c88aff', 24: '#ff7ad9', 25: '#a0a8c0', 26: '#05050f' };
 const TILES = {};
 function buildTiles() {
   const mk = (fn, n = 3) => { const out = []; for (let v = 0; v < n; v++) { const c = mkCanvas(16, 16), x = c.getContext('2d'); const r = RNG(v * 977 + 13); fn(x, r, v); out.push(c); } return out; };
@@ -35,6 +35,27 @@ function buildTiles() {
   TILES[23] = block('#a06ae0', '#5a3a9a', '#e0c0ff', (x, r) => { x.fillStyle = '#ffffff'; x.fillRect(3 + Math.floor(r() * 8), 2 + Math.floor(r() * 6), 1, 3); x.fillStyle = '#d0a0ff'; x.fillRect(8, 4, 3, 4); });
   TILES[24] = [GFX.flowerWall];
   TILES[25] = block('#c0c8e0', '#6a7090', '#ffffff', (x) => { x.fillStyle = '#ffe14d'; x.fillRect(7, 5, 2, 2); });
+  // ---- 星の川・ハート・ランドマーク ----
+  TILES[13] = TILES[14] = mk((x, r) => { x.fillStyle = 'rgba(40,90,220,.42)'; x.fillRect(0, 0, 16, 16); dust(x, r, ['#8ad0ff', '#ffffff', '#c8b0ff'], 6, .8); });
+  TILES[15] = mk((x, r, v) => { x.fillStyle = (v & 1) ? '#ffb0d8' : '#ff9ccc'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#ffd0e8'; x.fillRect(0, 0, 16, 1); x.fillRect(0, 0, 1, 16); });
+  TILES[16] = mk((x, r) => speck(x, r, '#3f9a3a', ['#4fb048', '#358a32', '#5cc052', '#ff7ad9'], 14));
+  TILES[18] = mk((x, r) => speck(x, r, '#d8b878', ['#e4c88a', '#c8a868'], 12));
+  TILES[19] = mk((x, r) => speck(x, r, '#b89a6a', ['#c8aa7a', '#a8895a'], 10));
+  const solidCol = (top, side, hl, deco) => block(top, side, hl, deco);
+  TILES[27] = solidCol('#ff4d8a', '#c8266a', '#ffb0d0', (x) => { x.fillStyle = '#ff8ab8'; x.fillRect(5, 4, 3, 3); x.fillRect(9, 4, 3, 3); x.fillRect(6, 6, 5, 3); x.fillRect(7, 9, 3, 1); });
+  TILES[28] = solidCol('#f4f4f8', '#c0c0d0', '#ffffff');
+  TILES[29] = solidCol('#2a2a34', '#14141c', '#4a4a5a');
+  TILES[30] = solidCol('#ffd23f', '#d8a020', '#fff3b0');
+  TILES[31] = solidCol('#e8c08a', '#c09060', '#f8dcb0');
+  TILES[32] = solidCol('#3a3a44', '#22222a', '#6a6a7a');
+  TILES[33] = solidCol('#ff8ab0', '#d86a90', '#ffc0d8');
+  TILES[34] = solidCol('#d8b070', '#a07840', '#f0d098', (x) => { x.fillStyle = '#a07840'; x.fillRect(0, 5, 16, 1); x.fillRect(7, 0, 1, 5); x.fillRect(3, 6, 1, 6); x.fillRect(11, 6, 1, 6); });
+  TILES[35] = solidCol('#d89a4a', '#a8702a', '#f0c070');
+  TILES[36] = solidCol('#ff9ccc', '#e06aa0', '#ffd0e8');
+  TILES[37] = solidCol('#ff9ccc', '#e06aa0', '#ffd0e8', (x, r) => { const cs = ['#ffe14d', '#4dc3ff', '#5fe36a', '#ffffff', '#c86bff']; for (let i = 0; i < 4; i++) { x.fillStyle = cs[i]; x.fillRect(2 + Math.floor(r() * 11), 2 + Math.floor(r() * 7), 2, 1); } });
+  TILES[38] = mk((x) => { x.fillStyle = '#3f9a3a'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#5a3a1a'; x.fillRect(6, 11, 4, 5); x.fillStyle = '#0b0b18'; x.beginPath(); x.arc(8, 7, 7.5, 0, TAU); x.fill(); x.fillStyle = '#1f6a2a'; x.beginPath(); x.arc(8, 7, 6.5, 0, TAU); x.fill(); x.fillStyle = '#2e8a3a'; x.beginPath(); x.arc(7, 6, 4.5, 0, TAU); x.fill(); x.fillStyle = '#5fc052'; x.fillRect(5, 3, 2, 2); }, 1);
+  TILES[39] = mk((x, r) => { x.fillStyle = '#a0a8c0'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#3d9bff'; x.fillRect(2, 2, 12, 12); x.fillStyle = '#8ad0ff'; x.fillRect(4, 4, 3, 1); x.fillRect(9, 8, 3, 1); x.fillStyle = '#ffffff'; x.fillRect(7, 6, 2, 2); });
+  TILES[40] = solidCol('#e8b82a', '#d8a020', '#fff3b0');
 }
 
 class Map2D {
@@ -109,29 +130,96 @@ function genTrainingMap(seed, sizePx) {
     let t = a < .32 ? 1 : 0; if (a > .72) t = 5; if (a > .6 && a <= .72 && b > .55) t = 2; if (t === 0 && b > .78) t = 4;
     m.set(tx, ty, t);
   }
+  const c = tw / 2, reserved = new Uint8Array(tw * th);
+  const reserve = (tx, ty) => { if (tx >= 0 && ty >= 0 && tx < tw && ty < th) reserved[ty * tw + tx] = 1; };
   // 道
   const roads = [];
   const nr = 2 + Math.floor(tw / 70);
   for (let k = 0; k < nr; k++) { roads.push(['h', Math.floor(tw * (k + 1) / (nr + 1)) + rng.int(-4, 4)]); roads.push(['v', Math.floor(tw * (k + 1) / (nr + 1)) + rng.int(-4, 4)]); }
-  const isRoad = new Uint8Array(tw * th);
-  for (const [d, p] of roads) for (let i = 0; i < tw; i++) for (let w = -1; w <= 1; w++) { const tx = d === 'h' ? i : p + w, ty = d === 'h' ? p + w : i; m.set(tx, ty, 3); if (tx >= 0 && ty >= 0 && tx < tw && ty < th) isRoad[ty * tw + tx] = 1; }
-  const free = (tx, ty) => tx > 2 && ty > 2 && tx < tw - 3 && ty < th - 3 && !isRoad[ty * tw + tx];
-  // 森
+  for (const [d, p] of roads) for (let i = 0; i < tw; i++) for (let w = -1; w <= 1; w++) { const tx = d === 'h' ? i : p + w, ty = d === 'h' ? p + w : i; m.set(tx, ty, 3); reserve(tx, ty); }
+  // 星の川 2本(内側: 時計回り / 外周: 反時計回り)。中心を囲む輪
+  const r1 = tw * .24, r2 = tw * .44;
+  for (let ty = 0; ty < th; ty++) for (let tx = 0; tx < tw; tx++) {
+    const d = Math.hypot(tx + .5 - c, ty + .5 - c);
+    if (Math.abs(d - r1) < 1.7) { m.set(tx, ty, 13); reserve(tx, ty); }
+    else if (Math.abs(d - r2) < 2.2) { m.set(tx, ty, 14); reserve(tx, ty); }
+  }
+  // ど真ん中: 中に入れる巨大ハート
+  const hs = clamp(tw * .07, 5, 10);
+  for (let y = -hs * 1.3; y <= hs * 1.3; y++) for (let x = -hs * 1.4; x <= hs * 1.4; x++) {
+    const X = x / hs, Y = -(y / hs) + .25, f = Math.pow(X * X + Y * Y - 1, 3) - X * X * Y * Y * Y;
+    const tx = Math.floor(c + x), ty = Math.floor(c + y);
+    if (f <= 0) { m.set(tx, ty, 15); reserve(tx, ty); }
+  }
+  for (let y = -hs * 1.3; y <= hs * 1.3; y++) for (let x = -hs * 1.4; x <= hs * 1.4; x++) {
+    const tx = Math.floor(c + x), ty = Math.floor(c + y); if (m.get(tx, ty) !== 15) continue;
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => m.get(tx + a, ty + b) !== 15 && m.get(tx + a, ty + b) !== 27);
+    const gate = Math.abs(tx + .5 - c) < 1.6 || Math.abs(ty + .5 - c) < 1.2; // 上下左右に入口
+    if (edge && !gate) m.set(tx, ty, 27);
+  }
+  m.set(Math.floor(c), Math.floor(c), 11);
+  // ランドマーク(同じ種類は1個ずつ)。2本の川のあいだの輪に並べる
+  m.landmarks = [];
+  const LM = shuffleR(['panda', 'colosseum', 'park', 'pencil', 'donut'], rng), rm = (r1 + r2) / 2, count = Math.min(LM.length, Math.max(2, Math.floor(TAU * rm / 17))), a0 = rng() * TAU;
+  for (let i = 0; i < count; i++) {
+    const a = a0 + i / count * TAU, lx = Math.round(c + Math.cos(a) * rm), ly = Math.round(c + Math.sin(a) * rm);
+    buildLandmark(m, LM[i], lx, ly, rng, reserve);
+  }
+  const free = (tx, ty) => tx > 2 && ty > 2 && tx < tw - 3 && ty < th - 3 && !reserved[ty * tw + tx];
+  // 小惑星帯
   const area = tw * th;
-  for (let k = 0; k < area / 500; k++) {
+  for (let k = 0; k < area / 600; k++) {
     const cx = rng.int(3, tw - 4), cy = rng.int(3, th - 4), r = rng.range(1, 3.2);
     for (let y = -4; y <= 4; y++) for (let x = -4; x <= 4; x++) if (x * x + y * y <= r * r && rng() < .8 && free(cx + x, cy + y)) m.set(cx + x, cy + y, 21);
   }
   // 岩・壁
-  for (let k = 0; k < area / 700; k++) {
+  for (let k = 0; k < area / 800; k++) {
     const cx = rng.int(3, tw - 6), cy = rng.int(3, th - 6), w = rng.int(1, 5), h = rng.int(1, 3), tt = rng() < .7 ? 20 : 22;
     const L = rng() < .4;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (free(cx + x, cy + y)) m.set(cx + x, cy + y, tt);
     if (L) for (let y = 0; y < 4; y++) if (free(cx, cy + y)) m.set(cx, cy + y, tt);
   }
-  // 中央広場
-  const c = tw >> 1; for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) { const d = x * x + y * y; if (d <= 25) m.set(c + x, c + y, d <= 2 ? 11 : 3); }
+  m.cx = c * TILE; m.cy = c * TILE; m.r1 = r1 * TILE; m.r2 = r2 * TILE;
   m.buildMini(); return m;
+}
+function shuffleR(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// ---- ランドマーク(タイルで描く巨大オブジェ) ----
+const LANDMARK_NAME = { panda: '巨大パンダ', colosseum: 'ミニ闘技場', park: 'デカ公園', pencil: '巨大えんぴつ', donut: '巨大ドーナツ' };
+function buildLandmark(m, kind, cx, cy, rng, reserve) {
+  const S = (x, y, t) => { const tx = cx + x, ty = cy + y; m.set(tx, ty, t); reserve(tx, ty); };
+  const area = (R) => { for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) reserve(cx + x, cy + y); };
+  area(8);
+  if (kind === 'panda') {
+    for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) { const d = x * x / 36 + y * y / 30; if (d <= 1) S(x, y, 28); }
+    for (const ex of [-5, 5]) for (let y = -8; y <= -5; y++) for (let x = ex - 2; x <= ex + 2; x++) if ((x - ex) ** 2 + (y + 6.5) ** 2 <= 4.5) S(x, y, 29);
+    for (const ex of [-3, 3]) for (let y = -2; y <= 1; y++) for (let x = ex - 1; x <= ex + 1; x++) S(x, y, 29);
+    S(-3, -1, 28); S(3, -1, 28); S(0, 2, 29); S(-1, 3, 29); S(1, 3, 29);
+  } else if (kind === 'colosseum') {
+    for (let y = -7; y <= 7; y++) for (let x = -7; x <= 7; x++) {
+      const d = Math.hypot(x, y); if (d > 7.4) continue;
+      const gate = Math.abs(x) <= 1 || Math.abs(y) <= 1;
+      S(x, y, d > 6.2 ? (gate ? 18 : 34) : (d < 1.2 ? 11 : 18));
+    }
+    for (const [x, y] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) S(x, y, 25);
+  } else if (kind === 'park') {
+    for (let y = -7; y <= 7; y++) for (let x = -8; x <= 8; x++) S(x, y, (x === 0 || y === 0 || Math.abs(x) === Math.abs(y)) ? 19 : 16);
+    for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) S(x, y, 39);
+    for (const [x, y] of [[-6, -5], [-4, -6], [6, -5], [5, -3], [-6, 4], [-3, 6], [6, 5], [3, 6], [-7, 0], [7, -1]]) S(x, y, 38);
+  } else if (kind === 'pencil') {
+    const L = 7;
+    for (let x = -L; x <= L; x++) for (let y = -1; y <= 1; y++) {
+      let t = 30; if (x <= -L + 1) t = 33; else if (x === -L + 2) t = 22; else if (x >= L - 2) t = 31;
+      if (x >= L - 1 && Math.abs(y) === 1) continue; if (x === L && y === 0) t = 32;
+      if (t === 30 && y === 0 && x % 3 === 0) t = 40; // 鉛筆の面のライン
+      S(x, y, t);
+    }
+  } else if (kind === 'donut') {
+    for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
+      const d = Math.hypot(x, y); if (d > 6.3 || d < 2.2) continue;
+      S(x, y, d > 5.4 || d < 3 ? 35 : (rng() < .22 ? 37 : 36));
+    }
+  }
+  m.landmarks.push({ kind, name: LANDMARK_NAME[kind], x: (cx + .5) * TILE, y: (cy + .5) * TILE });
 }
 
 // ---- 闘技場 ----
@@ -220,4 +308,42 @@ function genLabyrinth(map, seed) {
     if (walls(x, y) >= 2) corners.push({ x: (bx + cell / 2) * TILE, y: (by + cell / 2) * TILE });
   }
   return { over, corners };
+}
+
+// ============================================================
+//  マシンの移動(ホストとクライアントの予測で共通)。移動特性 mv ごとに挙動が変わる
+// ============================================================
+function stepMachine(p, dir, z, dt, map, ss) {
+  const M = MACHINES[p.m], mv = M.mv || 'normal';
+  p.mvT = (p.mvT || 0) + dt;
+  let turn = 12, grip = 7, coast = 3.5, maxS = Math.min(460, 108 * ss);
+  if (mv === 'slide') { grip = 1.25; coast = .55; maxS *= 1.15; turn = 14; }      // 超すべる
+  else if (mv === 'tank') { turn = 4.5; grip = 4; }                                  // 重戦車: 旋回が遅い
+  else if (mv === 'brake') { grip = 18; coast = 16; }                                // ピタ止め
+  else if (mv === 'hover') { grip = 2.2; coast = 1.2; }                              // ふわふわ
+  else if (mv === 'drift') { grip = 3; coast = 2; }
+  if (mv === 'rail') { if (dir !== null) p.a = Math.round(dir / (Math.PI / 4)) * (Math.PI / 4); }  // 8方向にカクッと曲がる
+  else if (dir !== null) p.a += clamp(angDiff(p.a, dir), -turn * dt, turn * dt);
+  // 星の川: 流れに乗ると超加速、逆らうと少し遅い。常にゆるく流される
+  let flow = null; const t = map.tileAt(p.x, p.y);
+  if ((t === 13 || t === 14) && map.cx !== undefined) { const dx = p.x - map.cx, dy = p.y - map.cy, d = Math.hypot(dx, dy) || 1, s = t === 13 ? 1 : -1; flow = [-dy / d * s, dx / d * s]; }
+  let tgt = z ? maxS : dir !== null ? maxS * .62 : 0;
+  if (flow && tgt > 0) { const al = Math.cos(p.a) * flow[0] + Math.sin(p.a) * flow[1]; if (al > .3) { tgt *= 1 + 1.4 * al * (mv === 'swim' ? 1.6 : 1); p.surf = .2; } else if (al < -.3) tgt *= .8; }
+  if (mv === 'dash') { // 一定間隔で突進
+    p.dashCd = (p.dashCd || 0) - dt; if (z && p.dashCd <= 0) { p.dashCd = .95; p.dashT = .18; }
+    if (p.dashT > 0) { p.dashT -= dt; tgt = maxS * 2.6; grip = 22; }
+  }
+  const k = Math.min(1, dt * (tgt > 0 ? grip : coast));
+  let ax = Math.cos(p.a) * tgt, ay = Math.sin(p.a) * tgt;
+  if (mv === 'zigzag' && tgt > 0) { const s = Math.sin(p.mvT * 7) * tgt * .5; ax -= Math.sin(p.a) * s; ay += Math.cos(p.a) * s; }  // ジグザグ
+  if (mv === 'swim' && tgt > 0) { const s = Math.sin(p.mvT * 4) * tgt * .3; ax -= Math.sin(p.a) * s; ay += Math.cos(p.a) * s; }    // うねり
+  if (mv === 'hover') { ax += Math.cos(p.mvT * 3) * 16; ay += Math.sin(p.mvT * 2.3) * 16; }
+  p.vx += (ax - p.vx) * k; p.vy += (ay - p.vy) * k;
+  const ovx = p.vx, ovy = p.vy, fx = flow ? flow[0] * 70 * dt : 0, fy = flow ? flow[1] * 70 * dt : 0;
+  const hit = map.move(p, p.vx * dt + fx, p.vy * dt + fy, M.big ? 8 : 6);
+  if (mv === 'bounce' && hit) { // 壁で跳ね返る(ピンボール)
+    if (p.vx !== ovx) p.vx = -ovx * 1.1; if (p.vy !== ovy) p.vy = -ovy * 1.1; p.a = Math.atan2(p.vy, p.vx); p.bounced = .15;
+  }
+  if (p.surf > 0) p.surf -= dt;
+  return hit;
 }
