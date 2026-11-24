@@ -36,7 +36,9 @@ const FONT = '"DotGothic16", "MS Gothic", monospace';
 // ------------------------------------------------------------
 const IN = { L: 1, R: 2, U: 4, D: 8, Z: 16, X: 32 };
 const Input = {
-  mask: 0, prev: 0, typing: false, pressed: 0, latch: 0,
+  mask: 0, prev: 0, typing: false, pressed: 0, latch: 0, kmask: 0, tmask: 0,
+  // キーボード(kmask)とタッチ(tmask)を合成。新しく押されたボタンは取りこぼさないよう記録
+  set(km, tm) { const nm = km | tm, nb = nm & ~this.mask; this.pressed |= nb; this.latch |= nb; this.kmask = km; this.tmask = tm; this.mask = nm; },
   down(b) { return ((this.mask | this.pressed) & b) !== 0; },
   hit(b) { return ((this.pressed & b) !== 0) || ((this.mask & b) !== 0 && (this.prev & b) === 0); },
   take() { const m = this.mask | this.latch; this.latch = 0; return m; }, // 短い押下も取りこぼさない(ゲーム入力用)
@@ -46,12 +48,12 @@ const KEYMAP = { ArrowLeft: IN.L, ArrowRight: IN.R, ArrowUp: IN.U, ArrowDown: IN
 addEventListener('keydown', e => {
   if (Input.typing) return;
   const b = KEYMAP[e.code];
-  if (b) { if (!(Input.mask & b)) { Input.pressed |= b; Input.latch |= b; } Input.mask |= b; e.preventDefault(); }
+  if (b) { Input.set(Input.kmask | b, Input.tmask); e.preventDefault(); }
   if (e.code === 'KeyM') Sound.toggleMute();
   Sound.unlock();
 });
-addEventListener('keyup', e => { const b = KEYMAP[e.code]; if (b) { Input.mask &= ~b; e.preventDefault(); } });
-addEventListener('blur', () => { Input.mask = 0; });
+addEventListener('keyup', e => { const b = KEYMAP[e.code]; if (b) { Input.set(Input.kmask & ~b, Input.tmask); e.preventDefault(); } });
+addEventListener('blur', () => { Input.set(0, 0); });
 function maskDir(m) {
   let x = 0, y = 0;
   if (m & IN.L) x--; if (m & IN.R) x++; if (m & IN.U) y--; if (m & IN.D) y++;

@@ -31,9 +31,9 @@ canvas.addEventListener('pointerdown', () => { window.focus(); Sound.unlock(); }
 const TextEntry = {
   open(label, value, max, cb, upper) {
     const box = document.getElementById('entry'), inp = document.getElementById('entryInput'), lab = document.getElementById('entryLabel');
-    lab.textContent = label; inp.value = value; inp.maxLength = max; box.style.display = 'flex'; Input.typing = true; Input.mask = 0;
+    lab.textContent = label; inp.value = value; inp.maxLength = max; box.style.display = 'flex'; Input.typing = true; Input.set(0, 0); Touch.release();
     setTimeout(() => { inp.focus(); inp.select(); }, 30);
-    const done = ok => { box.style.display = 'none'; Input.typing = false; inp.onkeydown = null; Input.prev = Input.mask = 0; if (ok) cb(upper ? inp.value.toUpperCase().trim() : inp.value.trim()); };
+    const done = ok => { box.style.display = 'none'; Input.typing = false; inp.onkeydown = null; Input.set(0, 0); Input.prev = Input.pressed = Input.latch = 0; if (ok) cb(upper ? inp.value.toUpperCase().trim() : inp.value.trim()); };
     inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); };
     document.getElementById('entryOk').onclick = () => done(true);
   },
@@ -282,11 +282,11 @@ function drawPause() {
   txt(ctx, 'ポーズ', W / 2, H / 2 - 40, 40, '#ffe14d', 'center', 5);
   txt(ctx, Net.role === 'host' ? 'Z: 試合を終了してロビーへ   X: 続ける' : 'Z: タイトルへ戻る   X: 続ける', W / 2, H / 2 + 20, 18, '#fff', 'center', 3);
 }
-addEventListener('keydown', e => {
-  if (e.code !== 'Escape' || Input.typing) return;
+function onEscape() {
   if (Scene.cur === 'game') Scene.paused = !Scene.paused;
   else if (Scene.cur === 'cgame') { Net.reset(); Scene.view = null; go('title'); }
-});
+}
+addEventListener('keydown', e => { if (e.code === 'Escape' && !Input.typing) onEscape(); });
 
 function prepRun() {
   Input.latch = 0;
@@ -328,6 +328,7 @@ function frame(now) {
   const S = Scenes[Scene.cur];
   ctx.imageSmoothingEnabled = false;
   S.update(dt); S.draw(dt);
+  Touch.frame();
   Input.endFrame();
   requestAnimationFrame(frame);
 }
@@ -335,7 +336,7 @@ async function boot() {
   loadSettings(); applyVol(); fit();
   ctx.fillStyle = '#07071a'; ctx.fillRect(0, 0, W, H);
   try { await Promise.race([document.fonts.load(`20px ${FONT}`), new Promise(r => setTimeout(r, 2500))]); } catch (e) { }
-  buildGFX(); buildTiles(); Particles.init(); Render.init(canvas);
+  buildGFX(); buildTiles(); Particles.init(); Render.init(canvas); Touch.init();
   Music.play('title');
   requestAnimationFrame(t => { last = t; frame(t); });
 }

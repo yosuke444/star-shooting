@@ -103,7 +103,7 @@ const UI = {
     S(0, 0, 1.3, () => this.drawTopLeft(ctx, V, time));
     S(W, 0, 1.2, () => { this.drawMinimap(ctx, V, time); this.drawEventPanel(ctx, V, time); if (V.phase === 'battle') this.drawBoard(ctx, V, time); });
     this.drawBossBar(ctx, V, time);
-    if (me) { S(0, H, 1.3, () => this.drawMachinePanel(ctx, V, me, time)); S(W, H, 1.3, () => this.drawItems(ctx, V, me, time)); S(0, 0, 1.2, () => this.drawTV(ctx, V, me)); }
+    if (me) { S(0, H, 1.3, () => this.drawMachinePanel(ctx, V, me, time)); S(W, H, 1.3, () => { if (Touch.on) ctx.translate(-200, 0); this.drawItems(ctx, V, me, time); }); /* スマホは Z/X ボタンと重ならない位置へ */ S(0, 0, 1.2, () => this.drawTV(ctx, V, me)); }
     S(0, 0, 1.2, () => this.drawFeed(ctx));
     this.drawCenter(ctx, V, me, time);
     this.drawKillPop(ctx, time);
