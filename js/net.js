@@ -208,8 +208,8 @@ class ClientView {
     c.M.forEach((a, j) => { const o = this.machines[j]; o.x = a[1]; o.y = a[2]; o.m = a[3]; o.a = a[4] / 100; });
     this.wilds = this.sync(this.maps.W, c.W.map(a => a[0]), id => ({ id, init: false }));
     c.W.forEach((a, j) => { const o = this.wilds[j]; o.tx = a[1]; o.ty = a[2]; if (!o.init) { o.x = o.tx; o.y = o.ty; o.init = true; } o.m = a[3]; o.a = a[4] / 100; o.stun = a[5] / 10; o.legend = !!a[6]; o.hp = a[7]; o.mhp = 100; o.flash = a[8] ? .1 : 0; });
-    this.boss = c.bo ? Object.assign(this.boss || { x: c.bo[0], y: c.bo[1] }, { tx: c.bo[0], ty: c.bo[1], hp: c.bo[2], mhp: c.bo[3], st: c.bo[4] ? 'charge' : 'walk', flash: c.bo[5] ? .1 : 0, vx: c.bo[6] }) : null;
-    this.fish = c.fi ? Object.assign(this.fish || { x: c.fi[0], y: c.fi[1] }, { tx: c.fi[0], ty: c.fi[1], hp: c.fi[2], mhp: c.fi[3], a: c.fi[4] / 100, flash: c.fi[5] ? .1 : 0 }) : null;
+    this.boss = c.bo ? Object.assign(this.boss || { x: c.bo[0], y: c.bo[1] }, { tx: c.bo[0], ty: c.bo[1], hp: c.bo[2], mhp: c.bo[3], st: c.bo[4] ? 'charge' : 'walk', flash: c.bo[5] ? .14 : 0, vx: c.bo[6] }) : null;
+    this.fish = c.fi ? Object.assign(this.fish || { x: c.fi[0], y: c.fi[1] }, { tx: c.fi[0], ty: c.fi[1], hp: c.fi[2], mhp: c.fi[3], a: c.fi[4] / 100, flash: c.fi[5] ? .14 : 0 }) : null;
     this.balls = c.ba.map(a => ({ x: a[0], y: a[1], kind: a[2], rot: a[3] / 10, vx: a[4], vy: a[5] }));
     this.meteors = c.me.map(a => ({ id: a[0], x: a[1], y: a[2], t: a[3] / 100, fall: a[4] / 100, r: a[5], big: a[6], kind: a[7] }));
     this.warps = c.wa.map(a => ({ id: a[0], x: a[1], y: a[2], hue: a[3] }));

@@ -121,13 +121,18 @@ const FX = {
         break;
       }
       case 'spark': if (v) Particles.burst(x, y, 6, 90, .25, 2, [PC(BULLET_COL[a][1]), C_WHITE]); break;
-      case 'hit': if (v) {
-        const col = PC(BULLET_COL[a] ? BULLET_COL[a][1] : '#fff');
-        Particles.burst(x, y, 9, 150, .3, 2.5, [C_WHITE, col, C_YEL]); FxObjs.add({ type: 'disc', x, y, r0: 7, r1: 1, col: '#ffffff', life: .07 });
-        Sound.play('hit', v * .8);
-        if (c === me && b) { UI.dmgNum(x, y, b, '#fff6a0', b >= 15); if (b >= 15) { this.stop(.03); this.addShake(2); } }
+      case 'hit': if (v) { // 弾が何かに命中: その弾の色で小さく爆発
+        const cc = BULLET_COL[a] ? BULLET_COL[a][1] : '#fff', col = PC(cc), big = b >= 12;
+        FxObjs.add({ type: 'disc', x, y, r0: big ? 14 : 10, r1: 2, col: '#ffffff', life: .09 });
+        FxObjs.add({ type: 'disc', x, y, r0: 4, r1: big ? 16 : 11, col: cc, life: .16 });
+        FxObjs.add({ type: 'ring', x, y, r0: 3, r1: big ? 26 : 18, w: 3, col: cc, life: .22 });
+        FxObjs.add({ type: 'spark', x, y, r: big ? 22 : 15, col: '#ffffff', s: [0, 1, 2, 3, 4].map(() => Math.random() * TAU), life: .16 });
+        Particles.burst(x, y, big ? 16 : 10, 170, .35, 2.5, [C_WHITE, col, C_YEL]);
+        Sound.play('hit', v * .9);
+        if (c === me && b) { UI.dmgNum(x, y, b, '#fff6a0', b >= 15); this.stop(b >= 15 ? .05 : .018); this.addShake(b >= 15 ? 4 : 1.5); }
+        else if (v > .7) this.addShake(.8);
       } break;
-      case 'hurt': if (a === me) { Sound.play('hurt', 1); this.addShake(Math.min(12, 4 + b / 3)); this.hurt = .5; this.stop(Math.min(.09, .02 + b / 300)); UI.dmgNum(x, y, b, '#ff4d4d', true); } if (v) Particles.burst(x, y, 10, 90, .35, 2.5, [C_RED, C_WHITE]); break;
+      case 'hurt': if (a === me) { Sound.play('hurt', 1); this.addShake(Math.min(16, 6 + b / 2)); this.hurt = .5; this.stop(Math.min(.12, .04 + b / 200)); UI.dmgNum(x, y, b, '#ff4d4d', true); } else if (v > .5) this.addShake(2); if (v) Particles.burst(x, y, 10, 90, .35, 2.5, [C_RED, C_WHITE]); break;
       case 'death': {
         this.boom(x, y, 22, [C_WHITE, C_YEL, C_ORA, C_RED, PC(MACHINES[a].col)], 90, true);
         Particles.burst(x, y, 24, 220, 1.4, 4, [PC(MACHINES[a].col), C_DARK], 1.2);
@@ -135,7 +140,7 @@ const FX = {
         if (v > .3) { this.addShake(12); this.stop(.12); this.kick(.12); this.flash = .18; this.flashCol = '#fff3d0'; }
         break;
       }
-      case 'pop': if (v) { const col = PC(ENEMY_ART[ENEMIES[a].spr].pal.b); this.boom(x, y, 9, [col, C_WHITE, C_YEL, C_RED], 30, false); Sound.play('boom', v * .7); this.addShake(3); this.stop(.025); } break;
+      case 'pop': if (v) { const col = PC(ENEMY_ART[ENEMIES[a].spr].pal.b); this.boom(x, y, 11, [col, C_WHITE, C_YEL, C_RED], 36, false); Sound.play('boom', v * .8); this.addShake(5); this.stop(.05); } break;
       case 'pick': if (v) { const col = a < PK_ITEM ? PC(STAT_COL[a]) : C_YEL; Particles.burst(x, y, 12, 90, .45, 2.5, [col, C_WHITE]); FxObjs.add({ type: 'ring', x, y, r0: 2, r1: 16, w: 2, col: a < PK_ITEM ? STAT_COL[a] : '#ffe14d', life: .25 }); } break;
       case 'mag': { const n = Math.min(30, b * 3 + 3); const orbs = []; for (let i = 0; i < n; i++) { const an = Math.random() * TAU, s = rnd(120, 280); orbs.push({ x, y, vx: Math.cos(an) * s, vy: Math.sin(an) * s, i }); } FxObjs.add({ type: 'mag', x, y, tgt: a, orbs, cols: STAT_COL.concat(['#ffe14d']), life: 3 }); break; }
       case 'chest': { const big = a === 1 || a === 3 || a === 4; this.boom(x, y, big ? 26 : 14, [C_GOLD, C_YEL, C_WHITE].concat(a === 3 ? RAINBOW : []), big ? 110 : 50, big); Particles.burst(x, y, big ? 40 : 18, 260, 1, 3, RAINBOW, 2, 60); Sound.play('chest', Math.max(v, .1)); Sound.play('boom', v * .6); if (v > .4) { this.addShake(big ? 10 : 5); this.stop(big ? .1 : .05); this.kick(big ? .1 : .05); } break; }

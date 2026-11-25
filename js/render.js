@@ -198,7 +198,7 @@ const Render = {
     // 敵は赤いオーラ
     const w = this.w, pul = .28 + Math.sin(time * 6 + e.id) * .1; w.globalAlpha = pul; w.fillStyle = '#ff2030'; w.beginPath(); w.arc(e.x, e.y + bob, 11, 0, TAU); w.fill(); w.globalAlpha = pul * 1.6; w.strokeStyle = '#ff4d4d'; w.lineWidth = 1; w.beginPath(); w.arc(e.x, e.y + bob, 12 + Math.sin(time * 8 + e.id) * 1.5, 0, TAU); w.stroke(); w.globalAlpha = 1;
     this.shadow(e.x, e.y + 8, 6, 2);
-    this.spr(img, e.x, e.y + bob, 0, e.face < 0, 1.4);
+    const ej = e.flash > 0 ? rnd(-1.5, 1.5) : 0; this.spr(img, e.x + ej, e.y + bob + ej, 0, e.face < 0, 1.4);
     if (e.hp < e.mhp) this.bar(e.x, e.y - 12, 12, e.hp / e.mhp, STAT_COL[T.drop < 0 ? 1 : T.drop]);
   },
   drawWild(wl, time) {
@@ -206,7 +206,7 @@ const Render = {
     if (wl.legend) { w.globalAlpha = .45; w.fillStyle = PAL[RAINBOW[Math.floor(time * 12) % 8]]; w.beginPath(); w.arc(wl.x, wl.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; }
     this.shadow(wl.x, wl.y + 7, 7, 2.5);
     const wlv = wl.mhp ? dmgLvl(wl.hp / wl.mhp) : 0; this.smoke(wl.x, wl.y, wlv, 7);
-    this.spr(wl.flash > 0 ? GFX.machineW[wl.m] : GFX.machineD[wl.m][wlv], wl.x, wl.y, wl.a);
+    const wj = wl.flash > 0 ? rnd(-2, 2) : 0; this.spr(wl.flash > 0 ? GFX.machineW[wl.m] : GFX.machineD[wl.m][wlv], wl.x + wj, wl.y, wl.a, false, 1.35);
     if (wl.stun > 0) {
       for (let i = 0; i < 3; i++) { const a = time * 4 + i * TAU / 3; w.fillStyle = '#ffe14d'; w.fillRect(Math.round(wl.x + Math.cos(a) * 9) - 1, Math.round(wl.y - 12 + Math.sin(a) * 3) - 1, 3, 3); }
     } else if (wl.mhp) this.bar(wl.x, wl.y - 13, 16, wl.hp / wl.mhp, '#3dffe0');
@@ -251,7 +251,7 @@ const Render = {
     // 残像(疾走感)
     if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.aim ?? p.a, s: big ? 2.1 : 1.45, life: .16 });
     const plv = dmgLvl(p.hp / 100); this.smoke(p.x, p.y, plv, big ? 10 : 7);
-    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machineD[p.m][plv], p.x, p.y, p.aim ?? p.a, false, big ? 2.1 : 1.45); // 全員サイズアップ
+    const pj = p.flash > 0 ? rnd(-2, 2) : 0; if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machineD[p.m][plv], p.x + pj, p.y - pj, p.aim ?? p.a, false, big ? 2.1 : 1.45); // 全員サイズアップ
     // バフ
     if (p.buf) {
       if (p.buf.bar > 0) { w.globalAlpha = .35 + Math.sin(time * 10) * .15; w.fillStyle = '#8ad0ff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; w.strokeStyle = '#ffffff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.stroke(); }
@@ -279,7 +279,7 @@ const Render = {
     if (Math.random() < .5) Particles.add(b.x + rnd(-36, 36), b.y + rnd(-30, 36), 0, -30, .8, 3, Math.random() < .5 ? C_PUR : C_DARK, 1);
     const sc = b.st === 'charge' ? 1.62 : 1.5;
     const blv = dmgLvl(b.hp / b.mhp); this.smoke(b.x, b.y, blv, 40); this.smoke(b.x, b.y, blv, 40);
-    this.spr(b.flash > 0 ? GFX.bossW : GFX.bossD[blv], b.x, b.y + bob, 0, (b.vx || 0) < 0, sc);
+    const bj = b.flash > 0 ? rnd(-3, 3) : 0; this.spr(b.flash > 0 ? GFX.bossW : GFX.bossD[blv], b.x + bj, b.y + bob, 0, (b.vx || 0) < 0, sc);
   },
   // 金魚が通った跡に虹の帯を残す(数秒で消える)
   fishTrail: [],
@@ -300,7 +300,7 @@ const Render = {
     const flv = dmgLvl(f.hp / f.mhp); this.smoke(f.x, f.y, flv, 44);
     const img = f.flash > 0 ? GFX.fishW : GFX.fishD[Math.floor(time * 8) % 8][flv];
     const left = Math.cos(f.a) < 0;
-    this.spr(img, f.x, f.y + Math.sin(time * 2) * 3, 0, left, 1.25);
+    const fj = f.flash > 0 ? rnd(-3, 3) : 0; this.spr(img, f.x + fj, f.y + Math.sin(time * 2) * 3 + fj, 0, left, 1.25);
     if (Math.random() < .5) Particles.add(f.x + rnd(-30, 30), f.y + rnd(-18, 18), rnd(-10, 10), rnd(-20, 0), .9, 3, RAINBOW[(Math.random() * 8) | 0], 1);
   },
   drawBall(b) { this.shadow(b.x, b.y + 20, 19, 6); this.spr(GFX.balls[b.kind], b.x, b.y - 3, b.rot, false, 1.55); },

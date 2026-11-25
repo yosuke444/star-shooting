@@ -84,11 +84,11 @@ const Events = {
   u_boss(g, c, dt) { if (!g.boss) c.done = true; },
   e_boss(g, c) { if (g.boss) { g.fx('bossOut', g.boss.x, g.boss.y); g.boss = null; } },
   damageBoss(g, b, dmg, src) {
-    if (b.hp <= 0) return; b.hp -= dmg; b.flash = .08;
+    if (b.hp <= 0) return; b.hp -= dmg; b.flash = .12;
     if (src >= 0) { b.dmgBy[src] = (b.dmgBy[src] || 0) + dmg; b.last = src; }
     if (b.hp <= 0) {
       g.fx('bossDie', b.x, b.y);
-      g.scatter(b.x, b.y, g.makeLoot(22, 1, 1, .5, .2).concat([g.rollItem(true), g.rollItem(true), g.rollItem(false)]), 170);
+      g.scatter(b.x, b.y, g.makeLoot(14, 1, 1, .5, .2).concat([g.rollItem(true), g.rollItem(true), g.rollItem(false)]), 170);
       const rank = Object.entries(b.dmgBy).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => +e[0]);
       const rewards = [[6, 1], [4, 1], [3, 0]];
       rank.forEach((id, i) => { const p = g.players[id]; if (p && !p.out && p.dead <= 0) { g.give(p, g.makeLoot(rewards[i][0], 0, rewards[i][1]), b.x, b.y); g.note(p, 'ダメージ' + (i + 1) + '位ボーナス!', '#ffe14d'); } });
@@ -162,7 +162,7 @@ const Events = {
   s_star(g, c) { c.spawn = 0; },
   u_star(g, c, dt) {
     c.spawn -= dt;
-    if (c.spawn <= 0 && c.t > 1.2) { c.spawn = c.dur / (g.n() * 8); const pos = g.map.freePos(6); g.meteors.push({ id: g.id(), x: pos.x, y: pos.y, t: 0, fall: 1.1, r: 0, big: 0, kind: 2 }); }
+    if (c.spawn <= 0 && c.t > 1.2) { c.spawn = c.dur / (g.n() * 4); const pos = g.map.freePos(6); g.meteors.push({ id: g.id(), x: pos.x, y: pos.y, t: 0, fall: 1.1, r: 0, big: 0, kind: 2 }); }
   },
   landMeteor(g, m) {
     if (m.kind === 2) { g.fx('starLand', m.x, m.y); g.scatter(m.x, m.y, Math.random() < .3 ? [rndi(0, 3), rndi(0, 3)] : [rndi(0, 3)], 40); return; }
@@ -170,14 +170,14 @@ const Events = {
     const dmg = m.big ? 60 : 22;
     g.forTargets(m.x, m.y, m.r, (o, kind) => g.hit(o, kind, kind === 1 ? dmg : dmg * 3, -1, m.x, m.y));
     if (m.big) g.scatter(m.x, m.y, g.makeLoot(18, 1, 1, .4, .15).concat([g.rollItem(true), g.rollItem(false)]), 220);
-    else if (Math.random() < .22) g.scatter(m.x, m.y, [rndi(0, 3)], 30);
+    else if (Math.random() < .12) g.scatter(m.x, m.y, [rndi(0, 3)], 30);
   },
 
   // ---------- ゴールドラッシュ ----------
   s_gold(g, c) {
-    const n = Math.min(130, 22 + Math.round(g.n() * 2));
+    const n = Math.min(100, 16 + Math.round(g.n() * 1.4));
     for (let i = 0; i < n; i++) g.spawnChest('G', g.map.freePos(8));
-    for (let i = 0; i < 5; i++) g.spawnChest('O', g.spawnPos(14, 160));
+    for (let i = 0; i < 3; i++) g.spawnChest('O', g.spawnPos(14, 160));
   },
   e_gold(g) { for (const ch of g.chests) if (ch.type === 'G' || ch.type === 'O') { ch.hp = 0; g.fx('vanish', ch.x, ch.y); } g.chests = g.chests.filter(ch => ch.hp > 0); },
 
@@ -193,7 +193,7 @@ const Events = {
   e_fish(g) { if (g.fish) { g.fx('vanish', g.fish.x, g.fish.y); g.fish = null; } },
   damageFish(g, f, dmg, src) {
     // 体力の概念なし: ダメージが一定たまるたびにアイテム・ステータスがこぼれる
-    f.acc += dmg; f.flash = .06;
+    f.acc += dmg; f.flash = .12;
     const step = f.mhp * .012;
     while (f.acc >= step) { f.acc -= step; g.scatter(f.x, f.y, [Math.random() < .15 ? g.rollItem(Math.random() < .25) : rndi(0, 3)], 120); }
   },
@@ -209,7 +209,7 @@ const Events = {
   u_wild(g, c) { if (!g.wilds.length) c.done = true; },
   e_wild(g) { for (const w of g.wilds) g.fx('vanish', w.x, w.y); g.wilds = []; },
   damageWild(g, w, dmg, src) {
-    if (w.stun > 0 || w.taken) return; w.hp -= dmg; w.flash = .08;
+    if (w.stun > 0 || w.taken) return; w.hp -= dmg; w.flash = .14;
     if (w.hp <= 0) { w.stun = 8; w.hp = 0; g.fx('stun', w.x, w.y); }
   },
   boardWild(g, p, w) {
@@ -247,8 +247,8 @@ const Events = {
   u_maze(g, c, dt) {
     c.spawn -= dt;
     if (c.spawn <= 0) {
-      c.spawn = Math.max(.25, 1.5 - g.n() * .02);
-      const cn = pick(c.corners); if (cn) { const pos = { x: cn.x, y: cn.y }; g.map.unstuck(pos, 4); const codes = [rndi(0, 3), rndi(0, 3)]; if (Math.random() < .5) codes.push(rndi(0, 3)); if (Math.random() < .2) codes.push(g.rollItem(Math.random() < .3)); g.fx('flowerPop', pos.x, pos.y); g.scatter(pos.x, pos.y, codes, 40, 'maze'); }
+      c.spawn = Math.max(.4, 2.4 - g.n() * .02);
+      const cn = pick(c.corners); if (cn) { const pos = { x: cn.x, y: cn.y }; g.map.unstuck(pos, 4); const codes = [rndi(0, 3)]; if (Math.random() < .4) codes.push(rndi(0, 3)); if (Math.random() < .2) codes.push(g.rollItem(Math.random() < .3)); g.fx('flowerPop', pos.x, pos.y); g.scatter(pos.x, pos.y, codes, 40, 'maze'); }
     }
   },
   e_maze(g) { g.map.over = null; g.map.buildMini(); let n = 0; g.pickups = g.pickups.filter(k => { if (k.tag !== 'maze') return true; if (n++ % 3 === 0) g.fx('vanish', k.x, k.y); return false; }); }, // 残ったアイテムは消える(急いで集めよう)
@@ -258,14 +258,14 @@ const Events = {
     c.region = rndi(0, 8); const rx = c.region % 3, ry = Math.floor(c.region / 3);
     c.area = { x0: g.map.w * rx / 3, y0: g.map.h * ry / 3, x1: g.map.w * (rx + 1) / 3, y1: g.map.h * (ry + 1) / 3 };
     c.x = (c.area.x0 + c.area.x1) / 2; c.y = (c.area.y0 + c.area.y1) / 2; c.spawn = 0; c.made = 0;
-    for (let i = 0; i < 14 + g.n() / 3; i++) this.rushGroup(g, c);
+    for (let i = 0; i < 7 + g.n() / 5; i++) this.rushGroup(g, c); /* ラッシュは控えめに */
   },
   rushGroup(g, c) {
     const A = c.area; let pos;
     for (let i = 0; i < 30; i++) { pos = { x: rnd(A.x0 + 30, A.x1 - 30), y: rnd(A.y0 + 30, A.y1 - 30) }; if (!g.map.hitBox(pos.x, pos.y, 10)) break; }
-    g.spawnEnemyGroup(pos, [rndi(0, 3), rndi(0, 3)], rndi(4, 7)); c.made++;
+    g.spawnEnemyGroup(pos, [rndi(0, 3), rndi(0, 3)], rndi(3, 5)); c.made++;
   },
-  u_rush(g, c, dt) { c.spawn -= dt; if (c.spawn <= 0) { c.spawn = .7; if (g.enemies.length < g.enemyTarget() + 180) this.rushGroup(g, c); } },
+  u_rush(g, c, dt) { c.spawn -= dt; if (c.spawn <= 0) { c.spawn = 1.3; if (g.enemies.length < g.enemyTarget() + 70) this.rushGroup(g, c); } },
 
   // ---------- ビッグボール ----------
   s_ball(g, c) {

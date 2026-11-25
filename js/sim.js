@@ -61,7 +61,7 @@ class Game {
   enemyPow() { const k = this.phase === 'train' ? clamp(this.elapsed / this.cfg.trainTime, 0, 1) : 1; return { hp: .55 + .55 * k, dmg: .4 + .7 * k }; }
   n() { return this.players.length; }
   machineTarget() { return Math.round(3 + this.n() * .45); }
-  enemyTarget() { return Math.min(200, Math.round(16 + this.n() * 3)); }
+  enemyTarget() { return Math.min(170, Math.round(14 + this.n() * 2.4)); }
   chestTarget() { return Math.min(90, Math.round(8 + this.n() * 1.1)); }
 
   // ---------- FX ----------
@@ -92,7 +92,7 @@ class Game {
   spawnEnemyGroup(pos, types, cnt) {
     pos = pos || this.spawnPos(8, 220);
     if (!types) { types = [rndi(0, 3)]; if (Math.random() < .4) types.push(rndi(0, 3)); }
-    cnt = cnt || rndi(4, 7);
+    cnt = cnt || rndi(2, 4); // 1グループは小さめ
     for (let i = 0; i < cnt; i++) {
       const tp = pick(types), a = Math.random() * TAU, d = rnd(5, 40);
       const e = { id: this.id(), tp, x: pos.x + Math.cos(a) * d, y: pos.y + Math.sin(a) * d, vx: 0, vy: 0, hp: ENEMIES[tp].hp * this.enemyPow().hp, mhp: ENEMIES[tp].hp * this.enemyPow().hp, pw: this.enemyPow().dmg, t: Math.random() * 3, cd: 0, flash: 0, tgt: null, thk: 0, dir: Math.random() * TAU, face: 1 };
@@ -236,7 +236,7 @@ class Game {
     if (this.phase === 'battle' && (this.count > 0 || this.over)) return;
     if (this.phase !== 'train' && this.phase !== 'battle') return;
     const d = trueDmg ? raw : raw / p.sd / HP_SCALE;
-    p.hp -= d; p.flash = .12; if (src >= 0) { p.lastAtk = src; p.lastAtkT = this.elapsed; }
+    p.hp -= d; p.flash = .14; if (src >= 0) { p.lastAtk = src; p.lastAtkT = this.elapsed; }
     if (d > 1.5) this.fx('hurt', p.x, p.y, p.id, Math.min(99, Math.round(d)));
     if (this.phase === 'train') { p.dmgAcc += d; while (p.dmgAcc >= 25) { p.dmgAcc -= 25; this.shed(p, 1); } }
     if (partsN(p) > 0 && Math.random() < d / 55) { const held = []; for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) if (p.parts[k] & (1 << i)) held.push([k, i]); const [k, i] = pick(held); p.parts[k] &= ~(1 << i); this.scatter(p.x, p.y, [PK_PART + k * 3 + i], 80); this.note(p, 'パーツを落とした!', '#ff4d4d', 'x'); }
@@ -282,11 +282,10 @@ class Game {
   }
   damageEnemy(e, dmg, src) {
     if (e.hp <= 0) return;
-    e.hp -= dmg; e.flash = .1; if (src >= 0) e.aggro = src;
+    e.hp -= dmg; e.flash = .14; if (src >= 0) e.aggro = src;
     if (e.hp <= 0) {
       const T = ENEMIES[e.tp]; this.fx('pop', e.x, e.y, e.tp);
-      const st = T.drop < 0 ? rndi(0, 3) : T.drop; const codes = [st];
-      if (Math.random() < .15) codes.push(T.drop < 0 ? rndi(0, 3) : st);
+      const st = T.drop < 0 ? rndi(0, 3) : T.drop; const codes = Math.random() < .6 ? [st] : []; /* ステータスは出すぎないよう 6 割 */
       if (Math.random() < .05) codes.push(this.rollItem(false));
       // 倒した人(どんなに遠くても)がドロップの半分を受け取る
       const P = src >= 0 ? this.players[src] : null;
@@ -296,18 +295,18 @@ class Game {
   }
   damageChest(c, dmg, src) {
     if (c.hp <= 0 || c.type === 'L') return;
-    c.hp -= dmg; c.flash = .1; if (src >= 0) c.last = src;
+    c.hp -= dmg; c.flash = .14; if (src >= 0) c.last = src;
     if (c.hp <= 0) this.openChest(c, c.last);
   }
   openChest(c, who) {
     const P = who >= 0 ? this.players[who] : null;
     let loot;
     switch (c.type) {
-      case 'B': loot = this.makeLoot(rndi(2, 3), .3, .12, .01, .02); break;
-      case 'A': loot = this.makeLoot(rndi(4, 6), .55, .5, .07, .07); break;
-      case 'G': loot = this.makeLoot(rndi(1, 2), .15, .03); break;
-      case 'O': loot = this.makeLoot(rndi(10, 13), .8, .9, .35, .1); loot.push(this.rollItem(true)); break;
-      case 'L': loot = this.makeLoot(rndi(8, 10), 1, 1, .3, .15); loot.push(this.rollItem(true)); break;
+      case 'B': loot = this.makeLoot(rndi(1, 2), .3, .12, .01, .02); break;
+      case 'A': loot = this.makeLoot(rndi(2, 4), .55, .5, .07, .07); break;
+      case 'G': loot = this.makeLoot(Math.random() < .7 ? 1 : 0, .15, .03); break;
+      case 'O': loot = this.makeLoot(rndi(6, 8), .8, .9, .35, .1); loot.push(this.rollItem(true)); break;
+      case 'L': loot = this.makeLoot(rndi(5, 7), 1, 1, .3, .15); loot.push(this.rollItem(true)); break;
       case 'I': loot = [this.rollItem(true)]; if (Math.random() < .5) loot.push(this.rollItem(false)); break;
     }
     this.fx('chest', c.x, c.y, 'BAGOLI'.indexOf(c.type));
@@ -318,7 +317,7 @@ class Game {
 
   // ---------- マシン乗り換え ----------
   board(p, fm, wild) {
-    const M = MACHINES[p.m], gain = Math.min(6, Math.floor(p.ride / 10));
+    const M = MACHINES[p.m], gain = Math.min(4, Math.floor(p.ride / 15));
     const got = [0, 0, 0, 0];
     for (let i = 0; i < gain; i++) { const w = M.mul.map(v => v * v * v); let r = Math.random() * w.reduce((a, b) => a + b); let k = 0; while ((r -= w[k]) > 0) k++; got[k] += this.addStat(p, k); }
     this.fx('mexp', p.x, p.y, p.m);
@@ -411,7 +410,7 @@ class Game {
   spawnLoop(dt) {
     const s = this.spawnT;
     s.m -= dt; if (s.m <= 0) { s.m = 3; if (this.machines.length < this.machineTarget()) this.spawnMachine(); }
-    s.e -= dt; if (s.e <= 0) { s.e = 2.2; if (this.enemies.length < this.enemyTarget()) this.spawnEnemyGroup(); }
+    s.e -= dt; if (s.e <= 0) { s.e = 1.3; /* 小さいグループを少し多めに */ if (this.enemies.length < this.enemyTarget()) this.spawnEnemyGroup(); }
     s.c -= dt; if (s.c <= 0) { s.c = 5; if (this.chests.filter(c => c.type === 'A' || c.type === 'B').length < this.chestTarget()) this.spawnChest(); }
   }
 
