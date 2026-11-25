@@ -116,6 +116,15 @@ const UI = {
     this.legendShow = { t: 0, pid, mid, life: 3.2 }; Render.forceId = pid; Render.forceT = 3.2;
     Sound.play('win', 1); Sound.play('bigboom', .8); FX.flash = .5; FX.flashCol = '#ffffff';
   },
+  // ビッグアローのチャージ中は、フィールドの全員に緊張感のあるチャージ音(だんだん速く高く)
+  arrowTension(V, time) {
+    let tmin = 99; for (const p of V.players) if (p.arw && !p.out && p.dead <= 0) tmin = Math.min(tmin, p.arw.t);
+    if (tmin === 99) { this.arwNext = 0; return; }
+    if (time >= (this.arwNext || 0)) {
+      if (tmin > 0) { const k = 1 - tmin / 5; Sound.tone && Sound.ctx && (Sound.tone(260 + k * 700, .09, 'square', .1, 1.3), Sound.tone(130 + k * 350, .12, 'sawtooth', .08, 1)); this.arwNext = time + .42 - k * .34; }
+      else { Sound.ctx && Sound.tone(1400, .08, 'square', .12, .7); this.arwNext = time + .07; }
+    }
+  },
   // 乗り換え時の機体紹介カード(画面いっぱい)
   nameCard(m) { this.card = { m, t: 0, life: 1.9 }; },
   addNotes(notes) {
@@ -129,7 +138,7 @@ const UI = {
   dmgNum(x, y, v, col, big) { this.dmgs.push({ x: x + rnd(-6, 6), y, v: Math.round(v), col, big, t: 0 }); if (this.dmgs.length > 40) this.dmgs.shift(); },
   popIcon(V, ic) {
     const c = ic[0], r = ic.slice(1);
-    if (c === 's') return GFX.patchBig[+r]; if (c === 'k') return GFX.key; if (c === 'p') return partImg(V, +r); if (c === 'x') return GFX.skull;
+    if (c === 's') return GFX.patchBig[+r]; if (c === 'k') return GFX.key; if (c === 'p') return partImg(V, parseInt(r)); if (c === 'x') return GFX.skull;
     return GFX.itemUI[r] || GFX.itemUI.tv;
   },
   update(dt) {
@@ -182,8 +191,9 @@ const UI = {
     this.drawCenter(ctx, V, me, time);
     this.drawPops(ctx, V, time);
     this.drawCard(ctx, time);
-    this.drawLegendShow(ctx, V, time);
     this.drawBanners(ctx, time);
+    this.drawLegendShow(ctx, V, time); // 伝説完成の演出は一番手前
+    this.arrowTension(V, time);
   },
   // イベント発生時、画面のふちをイベント色で光らせる
   drawEdgeGlow(ctx, time) {
@@ -235,11 +245,11 @@ const UI = {
       const kind = p.ic[0], img = this.popIcon(V, p.ic), sc = (kind === 'p' ? 5 : kind === 'i' ? 4.6 : 4) * pop; ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
       if (kind === 'i' || kind === 'k') txt(ctx, p.s.replace(/ ?ゲット!|!$/g, ''), cx, cy + 40, 16, p.col, 'center', 4);
       if (kind === 'p') { // パーツ: 完成形のシルエットに今の集まり具合を重ねる
-        const idx = +p.ic.slice(1), k2 = Math.floor(idx / 3), me2 = V.players[Render.meId], li = V.legendOrder ? LEGEND_IDS.indexOf(V.legendOrder[k2]) : k2, up = GFX.legendUp[li], s2 = 3.2;
+        const idx = parseInt(p.ic.slice(1)), mask = +(p.ic.split(':')[1] || 0), k2 = Math.floor(idx / 3), li = V.legendOrder ? LEGEND_IDS.indexOf(V.legendOrder[k2]) : k2, up = GFX.legendUp[li], s2 = 3.2;
         ctx.globalAlpha = out * .3; ctx.drawImage(up, cx - 120 - up.width * s2 / 2, cy - up.height * s2 / 2, up.width * s2, up.height * s2); ctx.globalAlpha = out;
-        for (let i = 0; i < 3; i++) if (me2 && me2.parts[k2] & (1 << i)) ctx.drawImage(GFX.legendPieces[li][i], cx - 120 - up.width * s2 / 2, cy - up.height * s2 / 2, up.width * s2, up.height * s2);
+        for (let i = 0; i < 3; i++) if (mask & (1 << i)) ctx.drawImage(GFX.legendPieces[li][i], cx - 120 - up.width * s2 / 2, cy - up.height * s2 / 2, up.width * s2, up.height * s2);
         txt(ctx, 'LEGEND PARTS', cx, cy - 46, 14, '#ffe14d', 'center', 4); txt(ctx, p.s, cx, cy + 44, 18, p.col, 'center', 5);
-        txt(ctx, (me2 ? bits3(me2.parts[k2]) : 0) + '/3', cx + 110, cy, 30, '#ffffff', 'center', 6);
+        txt(ctx, bits3(mask) + '/3', cx + 110, cy, 30, bits3(mask) === 3 ? '#ffe14d' : '#ffffff', 'center', 6);
       }
       ctx.restore();
     }
@@ -284,7 +294,28 @@ const UI = {
       else if (L.mid === 13) { if (Math.random() < .25) FxObjs.add({ type: 'ring', x: p.x, y: p.y, r0: 10, r1: 120, w: 5, col: '#3d9bff', life: .8 }); for (let i = 0; i < 4; i++) { const a = -time * 5 + i * 1.6; Particles.add(p.x + Math.cos(a) * 50, p.y + Math.sin(a) * 50, Math.cos(a + 1.6) * 80, Math.sin(a + 1.6) * 80, .7, 4, PC('#9ae8ff'), 1); } }
       else { if (Math.floor(t * 3) !== Math.floor((t - .016) * 3)) { FxObjs.add({ type: 'ring', x: p.x, y: p.y, r0: 10, r1: 160, w: 10, col: '#a03dff', life: .7 }); FX.addShake(10); Sound.play('bigboom', .6); } }
     }
-    if (L.pid === Render.meId) return; // 自分が完成させた時は文字の帯を出さない(演出を見せる)
+    // 専用演出を画面の一番手前に(本人も他の人も見える)
+    if (p && t < 2.6) {
+      const x = Render.sx(p.x), y = Render.sy(p.y), e = Math.min(1, t / .4), fade = t > 2.1 ? (2.6 - t) / .5 : 1, col = M.col;
+      ctx.save(); ctx.globalAlpha = fade; ctx.globalCompositeOperation = 'lighter';
+      const [r, g, b] = hexRGB(col), gr = ctx.createRadialGradient(x, y, 10, x, y, 260 * e); gr.addColorStop(0, `rgba(${r},${g},${b},.7)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`); ctx.fillStyle = gr; ctx.fillRect(x - 260, y - 260, 520, 520);
+      rays(ctx, x, y, 30, 340 * e, 20, PAL[RAINBOW[Math.floor(time * 8) % 8]], time * 1.5, .35);
+      if (L.mid === 12) { // フェニックス: 炎の輪が回りながら広がる
+        for (let i = 0; i < 18; i++) { const a = time * 5 + i / 18 * TAU, rr = 50 + t * 70 + Math.sin(time * 9 + i) * 8, fs = 10 + Math.sin(time * 12 + i) * 4; ctx.fillStyle = i % 2 ? '#ffb43d' : '#ff5a1a'; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * rr, y + Math.sin(a) * rr - 6, fs * .6, fs, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff3b0'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr - 2, fs * .3, 0, TAU); ctx.fill(); }
+        for (let i = 0; i < 6; i++) { const a = -time * 2 + i * TAU / 6; ctx.strokeStyle = '#ffe14d'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, 40 + t * 60, a, a + .5); ctx.stroke(); }
+      } else if (L.mid === 13) { // リヴァイアサン: 水の輪が何重にも広がり、渦を巻く
+        for (let i = 0; i < 5; i++) { const rr = ((t * 160 + i * 60) % 300); ctx.strokeStyle = `rgba(120,200,255,${1 - rr / 300})`; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.stroke(); }
+        for (let i = 0; i < 24; i++) { const a = -time * 4 + i * .55, rr = 30 + i * 8; ctx.fillStyle = i % 2 ? '#9ae8ff' : '#ffffff'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr, 5, 0, TAU); ctx.fill(); }
+      } else { // ケルベロス: 3回の紫の衝撃波と地割れ
+        for (let i = 0; i < 3; i++) { const tt = t - i * .45; if (tt < 0) continue; const rr = tt * 320; ctx.strokeStyle = `rgba(170,80,255,${Math.max(0, 1 - tt / 1.1)})`; ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.stroke(); }
+        ctx.strokeStyle = 'rgba(255,90,90,.8)'; ctx.lineWidth = 4; for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + .2; let px = x, py = y; ctx.beginPath(); ctx.moveTo(px, py); for (let s = 0; s < 6; s++) { px += Math.cos(a + Math.sin(i * 7 + s) * .5) * 26 * e; py += Math.sin(a + Math.sin(i * 7 + s) * .5) * 26 * e; ctx.lineTo(px, py); } ctx.stroke(); }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      // 完成したマシンも手前に大きく
+      const img = GFX.machine[L.mid], s = 4 + Math.sin(time * 6) * .3; ctx.save(); ctx.translate(x, y); ctx.rotate(p.aim ?? p.a); ctx.drawImage(GFX.machineW[L.mid], -img.width * s / 2 - 3, -img.height * s / 2 - 3, img.width * s + 6, img.height * s + 6); ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
+      ctx.restore();
+    }
+    if (L.pid === Render.meId) return; // 自分が完成させた時はカットイン(文字の帯)だけ出さない
     ctx.save();
     const inK = Math.min(1, t / .3), out = k > .85 ? (1 - k) / .15 : 1; ctx.globalAlpha = out;
     // 斜めの帯(演出が見えるよう画面の下寄りに)

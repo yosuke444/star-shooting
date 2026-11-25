@@ -75,7 +75,7 @@ const FxObjs = {
           ctx.restore(); ctx.globalAlpha = 1; break;
         }
         case 'beam': {
-          ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.a); const w = 34 * (1 - k * .7);
+          ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.a); const w = 90 * (1 - k * .6);
           ctx.globalAlpha = 1 - k; ctx.fillStyle = '#ffcc33'; ctx.fillRect(0, -w / 2, 6000, w);
           ctx.fillStyle = '#ffffff'; ctx.fillRect(0, -w / 4, 6000, w / 2); ctx.restore(); ctx.globalAlpha = 1; break;
         }

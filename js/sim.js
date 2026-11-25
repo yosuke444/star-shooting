@@ -73,7 +73,7 @@ class Game {
   calcStats(p) {
     const M = MACHINES[p.m].mul, s = p.st;
     p.sa = M[0] * (1 + .06 * s[0]) * (p.buf.dumb > 0 ? 1.45 : 1);
-    p.ss = M[1] * (1 + .035 * s[1]) * (p.buf.jet > 0 ? 1.45 : 1) * this.speedMul;
+    p.ss = M[1] * (1 + .035 * s[1]) * (p.buf.jet > 0 ? 1.2 : 1) * this.speedMul;
     p.sd = M[2] * (1 + .06 * s[2]);
     p.sr = M[3] * (1 + .04 * s[3]) * (p.buf.glass > 0 ? 1.5 : 1);
   }
@@ -156,7 +156,7 @@ class Game {
   gainPart(p, k, piece) {
     const L = this.legend; if (L.done[k]) return;
     p.parts[k] |= 1 << piece; const mid = L.order[k];
-    this.note(p, MACHINES[mid].name + ' ' + PART_NAME[piece], MACHINES[mid].col, 'p' + (k * 3 + piece));
+    this.note(p, MACHINES[mid].name + ' ' + PART_NAME[piece], MACHINES[mid].col, 'p' + (k * 3 + piece) + ':' + p.parts[k]); // 取った時点の集まり具合も渡す
     if (p.parts[k] === 7) {
       L.done[k] = true;
       for (const q of this.players) q.parts[k] = 0;
@@ -200,7 +200,7 @@ class Game {
   }
   // ビッグアロー: 太い光線が 0.6 秒残って 6 回ヒット(防御特化以外はほぼ確殺)
   fireArrow(p, first) {
-    const B = p.beam, ca = Math.cos(B.a), sa = Math.sin(B.a), half = 26, dmg = 68 * p.sa;
+    const B = p.beam, ca = Math.cos(B.a), sa = Math.sin(B.a), half = 40, dmg = 68 * p.sa;
     if (first) this.fx('beam', B.x, B.y, Math.round(B.a * 1000));
     const test = (o, r) => { const dx = o.x - B.x, dy = o.y - B.y, along = dx * ca + dy * sa; if (along < 0) return false; const perp = Math.abs(-dx * sa + dy * ca); return perp < half + r; };
     for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, B.x, B.y);

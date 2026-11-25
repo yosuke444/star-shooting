@@ -254,9 +254,29 @@ const Render = {
     const pj = p.flash > 0 ? rnd(-2, 2) : 0; if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machineD[p.m][plv], p.x + pj, p.y - pj, p.aim ?? p.a, false, big ? 2.1 : 1.45); // 全員サイズアップ
     // バフ
     if (p.buf) {
-      if (p.buf.bar > 0) { w.globalAlpha = .35 + Math.sin(time * 10) * .15; w.fillStyle = '#8ad0ff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; w.strokeStyle = '#ffffff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.stroke(); }
-      if (p.buf.dumb > 0 && Math.random() < .25) Particles.add(p.x + rnd(-7, 7), p.y + rnd(-5, 5), 0, -25, .5, 2, PC(STAT_COL[0]), 1);
-      if (p.buf.glass > 0 && Math.random() < .25) Particles.add(p.x + rnd(-7, 7), p.y + rnd(-5, 5), 0, -25, .5, 2, PC(STAT_COL[3]), 1);
+      // 使用中のアイテムがひと目で分かるように(全員に見える)
+      w.globalCompositeOperation = 'lighter';
+      if (p.buf.bar > 0) { // バリア: 青い光が煌々と、大きくなったり小さくなったり
+        const R = 21 + Math.sin(time * 9) * 5, g = w.createRadialGradient(p.x, p.y, 2, p.x, p.y, R + 10);
+        g.addColorStop(0, 'rgba(120,200,255,.15)'); g.addColorStop(.7, 'rgba(80,170,255,.55)'); g.addColorStop(1, 'rgba(80,170,255,0)'); w.fillStyle = g; w.beginPath(); w.arc(p.x, p.y, R + 10, 0, TAU); w.fill();
+        w.strokeStyle = 'rgba(200,240,255,.95)'; w.lineWidth = 2; w.beginPath(); w.arc(p.x, p.y, R, 0, TAU); w.stroke();
+        w.strokeStyle = 'rgba(120,200,255,.7)'; w.lineWidth = 1; for (let i = 0; i < 6; i++) { const a = time * 2 + i * TAU / 6; w.beginPath(); w.moveTo(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R); w.lineTo(p.x + Math.cos(a + TAU / 6) * R, p.y + Math.sin(a + TAU / 6) * R); w.stroke(); }
+        if (Math.random() < .5) Particles.add(p.x + rnd(-R, R), p.y + rnd(-R, R), 0, -20, .4, 2, PC('#bfe8ff'), 1);
+      }
+      if (p.buf.jet > 0) { // ジェット: 後ろに長い青い噴射
+        const a = (p.aim ?? p.a) + Math.PI, L = 26 + Math.random() * 10;
+        for (let i = 0; i < 3; i++) { w.fillStyle = ['rgba(77,195,255,.5)', 'rgba(160,230,255,.6)', 'rgba(255,255,255,.7)'][i]; const wd = 9 - i * 3; w.beginPath(); w.moveTo(p.x + Math.cos(a + 1.57) * wd, p.y + Math.sin(a + 1.57) * wd); w.lineTo(p.x + Math.cos(a) * L * (1 - i * .25), p.y + Math.sin(a) * L * (1 - i * .25)); w.lineTo(p.x + Math.cos(a - 1.57) * wd, p.y + Math.sin(a - 1.57) * wd); w.fill(); }
+        w.strokeStyle = 'rgba(77,195,255,.8)'; w.lineWidth = 2; w.beginPath(); w.arc(p.x, p.y, 17 + Math.sin(time * 20) * 2, 0, TAU); w.stroke();
+      }
+      if (p.buf.dumb > 0) { // ダンベル: 赤い炎のオーラ
+        for (let i = 0; i < 2; i++) Particles.add(p.x + rnd(-11, 11), p.y + rnd(-6, 10), rnd(-8, 8), rnd(-70, -40), .45, 4, Math.random() < .5 ? C_RED : C_ORA, 1);
+        w.strokeStyle = `rgba(255,90,77,${.6 + Math.sin(time * 14) * .3})`; w.lineWidth = 3; w.beginPath(); w.arc(p.x, p.y, 19, 0, TAU); w.stroke();
+      }
+      if (p.buf.glass > 0) { // メガネ: 回る黄色の照準
+        const R = 24; w.strokeStyle = 'rgba(255,210,63,.9)'; w.lineWidth = 2; w.beginPath(); w.arc(p.x, p.y, R, 0, TAU); w.stroke();
+        for (let i = 0; i < 4; i++) { const a = time * 3 + i * Math.PI / 2; w.beginPath(); w.moveTo(p.x + Math.cos(a) * (R - 6), p.y + Math.sin(a) * (R - 6)); w.lineTo(p.x + Math.cos(a) * (R + 6), p.y + Math.sin(a) * (R + 6)); w.stroke(); }
+      }
+      w.globalCompositeOperation = 'source-over';
     }
     // 頭上アイコン: パーツ / 鍵
     let iy = p.y - (big ? 17 : 14);
@@ -331,8 +351,8 @@ const Render = {
     const w = this.w, a = p.arw.a, lock = p.arw.t <= 0;
     w.save(); w.translate(p.x, p.y); w.rotate(a);
     const fl = Math.floor(time * (lock ? 20 : 4 + (7 - p.arw.t) * 2)) % 2;
-    w.globalAlpha = lock ? .55 : (fl ? .32 : .18); w.fillStyle = lock ? '#ffffff' : '#ff2d2d'; w.fillRect(10, -16, 5000, 32);
-    w.globalAlpha = .9; w.fillStyle = '#ff2d2d'; w.fillRect(10, -17, 5000, 1); w.fillRect(10, 16, 5000, 1);
+    w.globalAlpha = lock ? .6 : (fl ? .34 : .2); w.fillStyle = lock ? '#ffffff' : '#ff2d2d'; w.fillRect(10, -40, 5000, 80);
+    w.globalAlpha = .95; w.fillStyle = '#ff2d2d'; w.fillRect(10, -42, 5000, 2); w.fillRect(10, 40, 5000, 2);
     w.fillStyle = '#ffe14d'; for (let d = 30 + (time * 120) % 40; d < 3000; d += 40) { w.fillRect(d, -1, 8, 2); w.fillRect(d + 4, -3, 2, 6); }
     w.restore(); w.globalAlpha = 1;
   },
