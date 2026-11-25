@@ -433,7 +433,7 @@ class Game {
     if (MACHINES[p.m].legend && p.hp < 100) p.hp = Math.min(100, p.hp + 1.2 * dt);
     const frozen = this.phase === 'battle' && (this.count > 0 || this.over);
     const m = frozen ? 0 : (p.mask | (p.latch | 0)), pm = p.pmask; p.pmask = m; p.latch = 0;
-    const dir = p.cpu ? p.aiDir : maskDir(m);
+    const dir = frozen ? null : p.cpu ? p.aiDir : maskDir(m); // カウントダウン中は CPU も動けない
     const z = (m & IN.Z) !== 0; p.z = z;
     const xHit = (m & IN.X) && !(pm & IN.X), xUp = !(m & IN.X) && (pm & IN.X);
     const r = MACHINES[p.m].big ? 8 : 6;
@@ -448,6 +448,7 @@ class Game {
     }
     // 向き・移動
     stepMachine(p, dir, z, dt, this.map, p.ss);
+    if (this.map.hitBox(p.x, p.y, r)) this.map.unstuck(p, r); // 万一壁に埋まったら押し出す
     // オートエイム: 近くの敵・宝箱・プレイヤーに自動で向く(移動方向とは別)
     if ((this.tick + p.id) % 4 === 0) p.aimTg = this.autoTarget(p);
     const at = p.aimTg; p.aim = at && (at.hp > 0 || at.stun !== undefined) && !at.out && !(at.dead > 0) ? Math.atan2(at.y - p.y, at.x - p.x) : p.a;
@@ -525,7 +526,7 @@ class Game {
       if (!b.pierce) { alive = false; return true; }
       return false;
     };
-    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 14 : 6) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
+    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 16 : 8) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
     if (alive && own >= 0) {
       if (this.boss) tryHit(this.boss, 4, 38);
       if (alive && this.fish) tryHit(this.fish, 5, 42);

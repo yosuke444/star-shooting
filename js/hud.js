@@ -29,6 +29,20 @@ function battleRank(V) { return V.players.slice().sort((a, b) => ((a.deaths || 0
 const BUFF_LIST = [['dumb', 0], ['jet', 1], ['bar', 2], ['glass', 3]];
 const BUFF_MAX = { dumb: 9, jet: 9, bar: 6, glass: 9 };
 
+// 機体スプライトを破片に分ける(撃破演出用・キャッシュ)
+const FRAG_CACHE = {};
+function shatter(m) {
+  if (!FRAG_CACHE[m]) {
+    const src = GFX.machine[m], w = src.width, h = src.height, cs = 4, out = [], d = src.getContext('2d').getImageData(0, 0, w, h).data;
+    for (let y = 0; y < h; y += cs) for (let x = 0; x < w; x += cs) {
+      let any = false; for (let yy = y; yy < Math.min(h, y + cs); yy++) for (let xx = x; xx < Math.min(w, x + cs); xx++) if (d[(yy * w + xx) * 4 + 3]) any = true;
+      if (!any) continue; const c = mkCanvas(cs, cs); c.getContext('2d').drawImage(src, x, y, cs, cs, 0, 0, cs, cs);
+      out.push({ img: c, ox: x + cs / 2 - w / 2, oy: y + cs / 2 - h / 2 });
+    }
+    FRAG_CACHE[m] = out;
+  }
+  return FRAG_CACHE[m].map(f => { const a = Math.atan2(f.oy, f.ox) + rnd(-.6, .6), sp = rnd(.6, 2); return { img: f.img, ox: f.ox, oy: f.oy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vr: rnd(-8, 8) }; });
+}
 const UI = {
   banners: [], feed: [], floats: [], prevEvt: null, prevPhase: null, sparks: [],
   reset() {
@@ -54,7 +68,7 @@ const UI = {
     if (V.phase !== this.prevPhase) {
       if (V.phase === 'roulette') { this.banner('トレーニング終了!', 'TIME UP', '#ff4d6d', true, 2); Sound.play('go', 1); }
       if (V.phase === 'battle') { this.banner(ARENAS[V.arena].name, 'BATTLE STAGE', ARENAS[V.arena].col, false, 2.2); Music.play('battle'); Render.cam.snap = true; this.timeAnn = {}; }
-      if (V.phase === 'result') { Music.stop(); this.resStart = null; this.resStep = -1; }
+      if (V.phase === 'result') { Music.stop(); this.resStart = null; this.resStep = -2; }
       this.prevPhase = V.phase;
     }
     // 残り時間の告知(2分・1分・30秒)
@@ -84,10 +98,12 @@ const UI = {
       case 'timeup': this.banner('タイムアップ!', 'TIME UP', '#ff4d6d', true, 2.4); Sound.play('go', 1); break;
     }
   },
-  // ---- 撃破演出: 倒した側と倒された側だけを、倒した側のマシン色の背景で大写し ----
+  // ---- 撃破演出: ①ヒットストップ+画面振動 → ②背景が倒した側の色になり、二人と決め手の弾幕だけを大写し・機体が木っ端微塵 ----
   startKO(V, k, v) {
-    this.ko = { t: 0, k, v, col: MACHINES[V.players[k].m].col, life: 1.3 };
-    FX.stop(.45); FX.kick(.3); FX.addShake(14); Sound.play('kill', 1); Sound.play('bigboom', 1);
+    const A = V.players[k], B = V.players[v];
+    const bullets = V.bullets.filter(b => d2(b.x, b.y, B.x, B.y) < 140 * 140).slice(0, 40).map(b => ({ x: b.x - B.x, y: b.y - B.y, vx: b.vx, vy: b.vy, col: b.col, r: b.r }));
+    this.ko = { t: 0, k, v, col: MACHINES[A.m].col, life: 2, bullets, frags: shatter(B.m), m: B.m, boom: false };
+    FX.stop(.32); FX.addShake(22); FX.kick(.25); FX.flash = .35; FX.flashCol = '#ffffff'; Sound.play('hurt', 1); Sound.play('hit', 1);
   },
   // ---- 伝説マシン完成: カットイン + 全員の視点を移す + 機体ごとの専用演出 ----
   startLegend(V, pid, mid) {
@@ -199,33 +215,47 @@ const UI = {
   },
   // 取得アイコン: 画面中央にドン → 小さくなってステータス欄へ飛ぶ
   drawPops(ctx, V, time) {
+    const me = V.players[Render.meId], ox = me ? Render.sx(me.x) : W / 2, oy = me ? Render.sy(me.y) - 78 * Render.cam.zoom : H / 2;
     for (const p of this.pops) {
-      const k = p.t / p.life, cx = W / 2, cy = H / 2 - 10;
+      const k = p.t / p.life, cx = ox, cy = oy;
       const pop = k < .25 ? .3 + k / .25 * 1.1 : k < .4 ? 1.4 - (k - .25) * 2.6 : 1, out = k > .7 ? (1 - k) / .3 : 1;
       ctx.save(); ctx.globalAlpha = out;
       const [r, g, b] = hexRGB(p.col);
-      const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, 130); gr.addColorStop(0, `rgba(${r},${g},${b},.55)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`); ctx.fillStyle = gr; ctx.fillRect(cx - 130, cy - 130, 260, 260);
-      rays(ctx, cx, cy, 30, 120 * pop, 12, p.col, time * 2, .35 * out);
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.globalAlpha = (1 - k) * out; ctx.beginPath(); ctx.arc(cx, cy, 30 + k * 90, 0, TAU); ctx.stroke(); ctx.globalAlpha = out;
-      const img = this.popIcon(V, p.ic), sc = 7 * pop; ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
+      const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, 70); gr.addColorStop(0, `rgba(${r},${g},${b},.55)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`); ctx.fillStyle = gr; ctx.fillRect(cx - 70, cy - 70, 140, 140);
+      rays(ctx, cx, cy, 18, 64 * pop, 12, p.col, time * 2, .4 * out);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.globalAlpha = (1 - k) * out; ctx.beginPath(); ctx.arc(cx, cy, 18 + k * 50, 0, TAU); ctx.stroke(); ctx.globalAlpha = out;
+      const img = this.popIcon(V, p.ic), sc = 4 * pop; ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
       ctx.restore();
     }
     // ステータス欄へ飛んでいく
-    for (const f of this.flyers) { const k = f.t / .5, e = k * k, x = lerp(W / 2, 46 + f.i * 64, e), y = lerp(H / 2 - 10, H - 38, e); ctx.globalAlpha = 1 - k * .5; iconC(ctx, GFX.patchBig[f.i], x, y, 4 - k * 2); ctx.globalAlpha = 1; }
+    for (const f of this.flyers) { const k = f.t / .5, e = k * k, x = lerp(ox, 26 + f.i * 64, e), y = lerp(oy, H - 38, e); ctx.globalAlpha = 1 - k * .5; iconC(ctx, GFX.patchBig[f.i], x, y, 3 - k * 1.5); ctx.globalAlpha = 1; }
   },
   // 撃破演出(背景を倒した側の色にして、二人だけを大写し)
   drawKO(ctx, V, time) {
-    const K = this.ko, k = K.t / K.life, A = V.players[K.k], B = V.players[K.v]; if (!A || !B) return;
-    ctx.save(); ctx.globalAlpha = k < .1 ? k / .1 : k > .8 ? (1 - k) / .2 : 1;
+    const K = this.ko, A = V.players[K.k], B = V.players[K.v]; if (!A || !B) return;
+    const bx = Render.sx(B.x), by = Render.sy(B.y), ax = Render.sx(A.x), ay = Render.sy(A.y);
+    // ① ヒットストップ中: いつもの画面に、被弾の閃光
+    if (K.t < .32) {
+      const k = K.t / .32; rays(ctx, bx, by, 10, 160 + k * 200, 18, '#ffffff', 0, .8 * (1 - k));
+      ctx.fillStyle = `rgba(255,255,255,${.5 * (1 - k)})`; ctx.beginPath(); ctx.arc(bx, by, 40 + k * 60, 0, TAU); ctx.fill();
+      return;
+    }
+    if (!K.boom) { K.boom = true; Sound.play('bigboom', 1); Sound.play('kill', 1); FX.addShake(16); }
+    const t = K.t - .32, L = K.life - .32, k = t / L;
+    ctx.save(); ctx.globalAlpha = k < .06 ? k / .06 : k > .85 ? (1 - k) / .15 : 1;
     ctx.fillStyle = K.col; ctx.fillRect(0, 0, W, H);
-    const ax = Render.sx(A.x), ay = Render.sy(A.y), bx = Render.sx(B.x), by = Render.sy(B.y);
-    rays(ctx, bx, by, 40, 900, 28, '#ffffff', time * .8, .25);
-    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let i = 0; i < 24; i++) { const a = i / 24 * TAU + time; ctx.fillRect(bx + Math.cos(a) * 300, by + Math.sin(a) * 300, 40, 3); }
-    { const s = k < .12 ? 3 - k / .12 * 2 : 1; ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(-.08); ctx.scale(s, s); ctx.globalAlpha *= .9; txt(ctx, 'BREAK!!', 0, 0, 110, '#ffffff', 'center', 12, '#0b0b18'); ctx.restore(); }
-    const dr = (p, x, y, s, rot) => { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); const img = GFX.machine[p.m]; ctx.drawImage(GFX.machineW[p.m], -img.width * s / 2 - 3, -img.height * s / 2 - 3, img.width * s + 6, img.height * s + 6); ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore(); };
-    dr(A, ax, ay, 5.5, A.aim ?? A.a); dr(B, bx, by, 5.5, (B.aim ?? B.a) + K.t * 12);
-    rays(ctx, bx, by, 10, 90 + k * 60, 10, '#fff6a0', -time * 3, .9 * (1 - k));
-    txt(ctx, A.name, ax, ay - 70, 26, '#ffffff', 'center', 6); txt(ctx, B.name, bx, by + 70, 22, '#ffffff', 'center', 5);
+    rays(ctx, bx, by, 40, 1000, 28, '#ffffff', time * .8, .22);
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < 30; i++) { const a = i / 30 * TAU + time * .5, r = 120 + ((time * 600 + i * 50) % 500); ctx.fillRect(bx + Math.cos(a) * r, by + Math.sin(a) * r, 46, 3); }
+    { const s = k < .1 ? 3 - k / .1 * 2 : 1; ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(-.08); ctx.scale(s, s); ctx.globalAlpha *= .9; txt(ctx, 'BREAK!!', 0, 0, 110, '#ffffff', 'center', 12, '#0b0b18'); ctx.restore(); }
+    // 決め手になった弾幕(スローモーション)
+    const z = Render.cam.zoom * SCALE;
+    for (const b of K.bullets) { const x = bx + (b.x + b.vx * t * .12) * z, y = by + (b.y + b.vy * t * .12) * z, C = BULLET_COL[b.col] || BULLET_COL[0], r = Math.max(4, (b.r + 2) * z); ctx.fillStyle = C[1]; ctx.beginPath(); ctx.arc(x, y, r * 1.6, 0, TAU); ctx.fill(); ctx.fillStyle = C[0]; ctx.beginPath(); ctx.arc(x, y, r * .8, 0, TAU); ctx.fill(); }
+    // 倒した側
+    const img = GFX.machine[A.m], s = 5.5; ctx.save(); ctx.translate(ax, ay); ctx.rotate(A.aim ?? A.a); ctx.drawImage(GFX.machineW[A.m], -img.width * s / 2 - 3, -img.height * s / 2 - 3, img.width * s + 6, img.height * s + 6); ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
+    // 倒された側: 木っ端微塵
+    for (const f of K.frags) { const d = t * 1.6; ctx.save(); ctx.translate(bx + (f.ox * s + f.vx * d * 90), by + (f.oy * s + f.vy * d * 90 + d * d * 60)); ctx.rotate(f.vr * d); ctx.globalAlpha *= Math.max(0, 1 - d * .45); ctx.drawImage(f.img, -f.img.width * s / 2, -f.img.height * s / 2, f.img.width * s, f.img.height * s); ctx.restore(); }
+    if (t < .5) rays(ctx, bx, by, 10, 80 + t * 300, 12, '#fff6a0', -time * 3, 1 - t * 2);
+    txt(ctx, A.name, ax, ay - 70, 26, '#ffffff', 'center', 6); txt(ctx, B.name, bx, by + 80, 22, '#ffffff', 'center', 5);
     ctx.restore();
   },
   // 伝説マシン完成カットイン
@@ -277,10 +307,12 @@ const UI = {
       if (p.out || !Render.onScreen(p.x, p.y) || p.id === Render.meId) continue;
       const x = Render.sx(p.x), y = Render.sy(p.y) - 30 * Render.cam.zoom;
       if (p.dead > 0) continue;
-      ctx.globalAlpha = .85; txt(ctx, p.name, x, y - 8, 13, PLAYER_COLS[p.col], 'center', 3);
-      if (V.phase === 'battle') { ctx.globalAlpha = .9; skull(ctx, x - 34, y - 8, p.deaths || 0, 1.4); }
-      const bw = 40; ctx.fillStyle = '#0b0b18'; ctx.fillRect(x - bw / 2 - 1, y + 2, bw + 2, 5); ctx.fillStyle = p.hp > 50 ? '#5fe36a' : p.hp > 25 ? '#ffd23f' : '#ff4d4d'; ctx.fillRect(x - bw / 2, y + 3, bw * clamp(p.hp / 100, 0, 1), 3);
-      ctx.globalAlpha = 1;
+      this.hpRing(ctx, Render.sx(p.x), Render.sy(p.y), 30 * Render.cam.zoom * (MACHINES[p.m].big ? 1.3 : 1), p.hp, time, .75, 4);
+      const ny = Render.sy(p.y) - 46 * Render.cam.zoom * (MACHINES[p.m].big ? 1.3 : 1), col = PLAYER_COLS[p.col];
+      ctx.font = `14px ${FONT}`; const tw = ctx.measureText(p.name).width + 14;
+      ctx.fillStyle = 'rgba(8,8,24,.75)'; ctx.fillRect(x - tw / 2, ny - 10, tw, 20); ctx.fillStyle = col; ctx.fillRect(x - tw / 2, ny - 10, tw, 2); ctx.fillRect(x - tw / 2, ny + 8, tw, 2); ctx.fillRect(x - tw / 2, ny - 10, 2, 20); ctx.fillRect(x + tw / 2 - 2, ny - 10, 2, 20);
+      txt(ctx, p.name, x, ny, 14, col, 'center', 0);
+      if (V.phase === 'battle') skull(ctx, x + tw / 2 + 12, ny - 4, p.deaths || 0, 1.4);
     }
     if (me && !me.out && me.dead <= 0 && V.phase === 'train') {
       let best = null, bd = 60 * 60;
@@ -302,16 +334,20 @@ const UI = {
   // 自機の周り: HP リング + 強化アイテムの残り時間リング
   drawRings(ctx, V, me, time) {
     if (!me || me.out || me.dead > 0) return;
-    const x = Render.sx(me.x), y = Render.sy(me.y), z = Render.cam.zoom, R = 34 * z * (MACHINES[me.m].big ? 1.3 : 1);
-    const hp = clamp(me.hp / 100, 0, 1), col = hp > .5 ? '#5fe36a' : hp > .25 ? '#ffd23f' : '#ff4d4d';
-    ctx.lineCap = 'round';
-    ctx.globalAlpha = .35; ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * 2.3); ctx.stroke();
-    ctx.globalAlpha = hp < .25 ? .6 + Math.sin(time * 14) * .4 : .8; ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * .7 + Math.PI * 1.6 * hp); ctx.stroke();
-    let rr = R + 8;
+    const x = Render.sx(me.x), y = Render.sy(me.y), z = Render.cam.zoom, R = 44 * z * (MACHINES[me.m].big ? 1.3 : 1);
+    this.hpRing(ctx, x, y, R, me.hp, time, .9, 6);
+    ctx.lineCap = 'round'; let rr = R + 10;
     if (me.buf) for (const [k, si] of BUFF_LIST) if (me.buf[k] > 0) {
-      const f = clamp(me.buf[k] / BUFF_MAX[k], 0, 1); ctx.globalAlpha = .85; ctx.strokeStyle = STAT_COL[si]; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(x, y, rr, -Math.PI / 2, -Math.PI / 2 + TAU * f); ctx.stroke(); rr += 7;
+      const f = clamp(me.buf[k] / BUFF_MAX[k], 0, 1); ctx.globalAlpha = .9; ctx.strokeStyle = STAT_COL[si]; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(x, y, rr, -Math.PI / 2, -Math.PI / 2 + TAU * f); ctx.stroke(); rr += 8;
     }
+    ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  },
+  hpRing(ctx, x, y, R, hpv, time, alpha, lw) {
+    const hp = clamp(hpv / 100, 0, 1), col = hp > .5 ? '#5fe36a' : hp > .25 ? '#ffd23f' : '#ff4d4d';
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = alpha * .45; ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = lw + 3; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * 2.3); ctx.stroke();
+    ctx.globalAlpha = hp < .25 ? alpha * (.6 + Math.sin(time * 14) * .4) : alpha; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * .7 + Math.PI * 1.6 * hp); ctx.stroke();
     ctx.globalAlpha = 1; ctx.lineCap = 'butt';
   },
   // ピンチ警告(体力・狙われている・隕石・安全地帯の外)
@@ -395,8 +431,9 @@ const UI = {
   // ミニマップ: 画面の真ん中に半透明で重ねる
   drawMinimap(ctx, V, time) {
     const M = V.map; if (!M.mini || V.phase === 'roulette') return;
-    const S = 230, sc = Math.min(S / M.w, S / M.h), ox = W / 2 - M.w * sc / 2, oy = H / 2 - M.h * sc / 2;
-    ctx.globalAlpha = .16; ctx.drawImage(M.mini, ox, oy, M.w * sc, M.h * sc); ctx.globalAlpha = 1;
+    const S = 170, sc = Math.min(S / M.w, S / M.h), ox = W - 10 - S + (S - M.w * sc) / 2, oy = 10 + (S - M.h * sc) / 2;
+    ctx.fillStyle = 'rgba(8,8,24,.35)'; ctx.fillRect(W - 14 - S, 6, S + 8, S + 8); ctx.strokeStyle = 'rgba(138,138,208,.35)'; ctx.lineWidth = 1; ctx.strokeRect(W - 14 - S, 6, S + 8, S + 8);
+    ctx.globalAlpha = .75; ctx.drawImage(M.mini, ox, oy, M.w * sc, M.h * sc); ctx.globalAlpha = 1;
     const P = (x, y) => [ox + x * sc, oy + y * sc];
     const dot = (x, y, s, col, a = .75) => { const [px, py] = P(x, y); ctx.globalAlpha = a; ctx.fillStyle = col; ctx.fillRect(Math.round(px - s / 2), Math.round(py - s / 2), s, s); };
     if (M.bnd) { const [a, b] = P(M.bnd.x0, M.bnd.y0), [c, d] = P(M.bnd.x1, M.bnd.y1); ctx.globalAlpha = .6; ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 2; ctx.strokeRect(a, b, c - a, d - b); }
@@ -470,12 +507,12 @@ const UI = {
       ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
       if (it.k === 'sword') txt(ctx, '×' + it.n, cx + s / 2, cy + s / 2 - 4, 18, '#ffe14d', 'right', 4);
     };
-    slot(0, W - 66, 62, 84); slot(1, W - 150, 42, 46);
-    txt(ctx, 'X', W - 106, 100, 18, '#ffe14d', 'center', 4);
+    slot(0, W - 250, 58, 80); slot(1, W - 326, 40, 44);
+    txt(ctx, 'X', W - 290, 92, 18, '#ffe14d', 'center', 4);
   },
   drawTV(ctx, V, me) {
     if (!me.tv || !V.evtList) return;
-    const x = W - 180, y = 120, L = V.evtList;
+    const x = W - 180, y = 200, L = V.evtList;
     ctx.globalAlpha = .8; txt(ctx, '番組表', x, y, 13, RAR_COL.SR, 'left', 3);
     L.forEach((t, i) => { const done = i < (V.evtIdx || 0) - (V.evt.cur ? 1 : 0), cur = V.evt.cur && i === V.evtIdx - 1; txt(ctx, (cur ? '▶ ' : done ? '✓ ' : (i + 1) + '. ') + EVENT_DEFS[t].short, x, y + 18 + i * 16, 12, cur ? EVENT_DEFS[t].col : done ? '#666' : '#fff', 'left', 3); });
     ctx.globalAlpha = 1;
@@ -552,6 +589,7 @@ const UI = {
     }
   },
 
+  resultFx(ctx) { for (const s of this.sparks) { ctx.globalAlpha = 1 - s.t / s.life; const z = s.s || 4; ctx.fillStyle = s.col; ctx.fillRect(s.x - z / 2, s.y - z / 2, z, z); } ctx.globalAlpha = 1; if (FX.flash > 0) { ctx.globalAlpha = Math.min(.7, FX.flash); ctx.fillStyle = FX.flashCol; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; } },
   // ============================================================
   //  リザルト: 下から2番目の人から順に発表 → 最後に1位と最下位を同時発表
   // ============================================================
@@ -562,12 +600,16 @@ const UI = {
     const intro = 1.6, step = clamp(7 / Math.max(1, n - 2), .22, .8), mids = Math.max(0, n - 2), finalT = intro + mids * step + 1.8;
     // 演出の段階が進んだら音を鳴らす
     const stepNow = T < intro ? -1 : T < intro + mids * step ? Math.floor((T - intro) / step) : T < finalT ? mids : mids + 1;
+    const burst = (x, y, cols, n, sp) => { for (let i = 0; i < n; i++) { const a = Math.random() * TAU, s = rnd(sp * .3, sp); this.sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 100, t: 0, life: rnd(.7, 1.6), col: pick(cols), s: rnd(4, 9) }); } };
     if (stepNow !== this.resStep) {
-      if (stepNow >= 0 && stepNow < mids) Sound.combo(Math.min(20, stepNow));
-      if (stepNow === mids && mids >= 0) { for (let i = 0; i < 12; i++) setTimeout(() => Sound.play('hit', 1), i * 120); }
-      if (stepNow === mids + 1) { Sound.play('win', 1); Sound.play('bigboom', 1); FX.flash = .6; FX.flashCol = '#ffffff'; Music.play('result'); }
+      if (stepNow === -1) { Sound.play('event', 1); FX.addShake(10); burst(280, H / 2, ['#ffe14d', '#ffffff', '#ff7ad9'], 80, 600); }
+      if (stepNow >= 0 && stepNow < mids) { const p = V.players[R[n - 2 - stepNow][0]]; Sound.combo(Math.min(20, stepNow)); Sound.play('boom', .5); FX.addShake(6); burst(280, H / 2, [p ? PLAYER_COLS[p.col] : '#fff', '#ffffff', '#ffe14d'], 50, 450); }
+      if (stepNow === mids && mids >= 0) { for (let i = 0; i < 20; i++) setTimeout(() => Sound.play('hit', 1), i * 85); }
+      if (stepNow === mids + 1) { Sound.play('win', 1); Sound.play('bigboom', 1); FX.flash = .8; FX.flashCol = '#ffffff'; FX.addShake(26); Music.play('result'); burst(280, 250, RAINBOW.map(c => PAL[c]).concat(['#ffffff', '#ffe14d']), 260, 900); burst(750, 110, ['#5a5a7a', '#8ad0ff', '#ffffff'], 60, 300); }
       this.resStep = stepNow;
     }
+    // 画面振動・フラッシュ・火花(リザルトでも効かせる)
+    ctx.save(); if (FX.shake > 0) ctx.translate((Math.random() - .5) * FX.shake, (Math.random() - .5) * FX.shake);
     // 背景: 回る光線 + 左右から振れるスポットライト
     const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1a0a3a'); bg.addColorStop(1, '#07071a'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     rays(ctx, 280, H / 2, 0, 1100, 22, '#5a3aaa', time * .25, .35);
@@ -605,6 +647,7 @@ const UI = {
         if (big) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H); for (let i = 0; i < 6; i++) { const a = time * 7 + i * TAU / 6; ctx.fillStyle = PAL[RAINBOW[i]]; ctx.beginPath(); ctx.arc(280 + Math.cos(a) * 190, H / 2 + Math.sin(a) * 80, 8, 0, TAU); ctx.fill(); } }
         ctx.save(); ctx.translate(280, H / 2); ctx.scale(s, s); txt(ctx, T < intro ? '結果発表!' : '1位と最下位は…!?', 0, 0, T < intro ? 72 : 44, '#ffe14d', 'center', 10); ctx.restore();
       }
+      this.resultFx(ctx); ctx.restore();
       return;
     }
     // ---- フィナーレ: 1位(大きく)と最下位(しょんぼり)を同時に ----
@@ -616,8 +659,8 @@ const UI = {
     const gr = ctx.createRadialGradient(0, 0, 10, 0, 0, 200); gr.addColorStop(0, 'rgba(255,225,77,.5)'); gr.addColorStop(1, 'rgba(255,225,77,0)'); ctx.fillStyle = gr; ctx.fillRect(-200, -200, 400, 400);
     iconC(ctx, GFX.crown, 0, -118, 6);
     ctx.save(); ctx.rotate(-Math.PI / 2 + Math.sin(time * 3) * .12); const img = GFX.machine[W1[4]], s = 8; ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
-    txt(ctx, 'WINNER', 0, 92, 28, '#ffe14d', 'center', 6);
-    txt(ctx, P1 ? P1.name : '', 0, 136, 46, P1 ? PLAYER_COLS[P1.col] : '#fff', 'center', 9, '#ffffff');
+    txt(ctx, 'WINNER', 0, 92, 28 + Math.sin(time * 6) * 2, PAL[RAINBOW[Math.floor(time * 10) % 8]], 'center', 6);
+    { const nm = P1 ? P1.name : '', chars = [...nm]; ctx.font = `46px ${FONT}`; let tw = 0; const ws = chars.map(c => { const w2 = ctx.measureText(c).width; tw += w2; return w2; }); let cx = -tw / 2; chars.forEach((c, i) => { txt(ctx, c, cx + ws[i] / 2, 136 + Math.sin(time * 6 + i * .7) * 7, 46, P1 ? PLAYER_COLS[P1.col] : '#fff', 'center', 9, '#ffffff'); cx += ws[i]; }); }
     skull(ctx, -40, 182, W1[5], 2.4); txt(ctx, '撃破 ' + W1[2], 20, 182, 18, '#fff', 'left', 4);
     ctx.restore();
     // 最下位
@@ -632,8 +675,12 @@ const UI = {
     }
     // 紙吹雪・花火
     for (let i = 0; i < 90; i++) { const x = (i * 131 + Math.sin(time + i) * 40) % 520, y = (fk * (90 + i % 7 * 30) + i * 41) % H; ctx.fillStyle = ['#ff4d6d', '#ffe14d', '#4dc3ff', '#5fe36a', '#c86bff', '#ffffff'][i % 6]; ctx.save(); ctx.translate(x + 20, y); ctx.rotate(time * 3 + i); ctx.fillRect(-4, -2, 8, 4); ctx.restore(); }
-    if (fk < 4 && Math.floor(fk * 3) !== Math.floor((fk - .016) * 3)) { const fx = rnd(80, 480), fy = rnd(60, 300); this.fireworks = this.fireworks || []; this.fireworks.push({ x: fx, y: fy, t: 0, col: pick(['#ff4d6d', '#ffe14d', '#4dc3ff', '#5fe36a', '#c86bff']) }); Sound.play('boom', .4); }
-    if (this.fireworks) { for (const f of this.fireworks) { f.t += 1 / 60; const r = f.t * 160; ctx.globalAlpha = Math.max(0, 1 - f.t / 1.2); ctx.fillStyle = f.col; for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; ctx.fillRect(f.x + Math.cos(a) * r - 2, f.y + Math.sin(a) * r + f.t * f.t * 40 - 2, 4, 4); } } this.fireworks = this.fireworks.filter(f => f.t < 1.2); ctx.globalAlpha = 1; }
+    if (Math.floor(fk * (fk < 5 ? 5 : 1.5)) !== Math.floor((fk - .016) * (fk < 5 ? 5 : 1.5))) { const fx = rnd(80, 480), fy = rnd(60, 300); this.fireworks = this.fireworks || []; this.fireworks.push({ x: fx, y: fy, t: 0, col: pick(['#ff4d6d', '#ffe14d', '#4dc3ff', '#5fe36a', '#c86bff']) }); Sound.play('boom', .4); }
+    if (this.fireworks) { for (const f of this.fireworks) { f.t += 1 / 60; const r = f.t * 190; ctx.globalAlpha = Math.max(0, 1 - f.t / 1.2); ctx.fillStyle = f.col; for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; ctx.fillRect(f.x + Math.cos(a) * r - 3, f.y + Math.sin(a) * r + f.t * f.t * 40 - 3, 6, 6); ctx.fillRect(f.x + Math.cos(a) * r * .6 - 1, f.y + Math.sin(a) * r * .6 + f.t * f.t * 40 - 1, 3, 3); } } this.fireworks = this.fireworks.filter(f => f.t < 1.2); ctx.globalAlpha = 1; }
+    // 金貨シャワー・最下位の雷
+    for (let i = 0; i < 30; i++) { const x = 60 + (i * 53 + Math.sin(i) * 40) % 440, y = ((fk * (140 + i % 5 * 40) + i * 67) % (H + 40)) - 20; ctx.fillStyle = '#ffcc33'; ctx.beginPath(); ctx.ellipse(x, y, 5 * Math.abs(Math.sin(time * 6 + i)) + 1, 6, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff3b0'; ctx.fillRect(x - 1, y - 3, 2, 2); }
+    if (n > 1 && Math.floor(time * 2.3) % 5 === 0 && (time * 2.3) % 1 < .12) { ctx.fillStyle = 'rgba(200,220,255,.35)'; ctx.fillRect(580, 40, 340, 160); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(760, 30); ctx.lineTo(740, 80); ctx.lineTo(765, 80); ctx.lineTo(735, 150); ctx.stroke(); }
+    this.resultFx(ctx); ctx.restore();
     const blink = Math.floor(time * 2) % 2;
     this.resultDone = fk > 1.5;
     if (blink && fk > 1.5) txt(ctx, Net.role === 'client' ? 'ホストの操作を待っています…' : 'Z: タイトルへ戻る', W / 2, H - 16, 16, '#fff', 'center', 3);

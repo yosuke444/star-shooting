@@ -72,9 +72,13 @@ class Map2D {
   tileAt(x, y) { return this.get(Math.floor(x / TILE), Math.floor(y / TILE)); }
   // 円の移動(軸分離)。ぶつかったら true
   move(e, dx, dy, r) {
-    let hit = false;
-    if (dx) { const nx = e.x + dx; if (!this.hitBox(nx, e.y, r)) e.x = nx; else { hit = true; e.vx = (e.vx || 0) * -0.25; } }
-    if (dy) { const ny = e.y + dy; if (!this.hitBox(e.x, ny, r)) e.y = ny; else { hit = true; e.vy = (e.vy || 0) * -0.25; } }
+    // 速すぎると壁をすり抜けて埋まるので、1回 5px 以下に分けて動かす
+    const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 5)); let hit = false, hx = false, hy = false;
+    for (let i = 0; i < n; i++) {
+      if (dx && !hx) { const nx = e.x + dx / n; if (!this.hitBox(nx, e.y, r)) e.x = nx; else hx = true; }
+      if (dy && !hy) { const ny = e.y + dy / n; if (!this.hitBox(e.x, ny, r)) e.y = ny; else hy = true; }
+    }
+    if (hx) { hit = true; e.vx = (e.vx || 0) * -0.25; } if (hy) { hit = true; e.vy = (e.vy || 0) * -0.25; }
     return hit;
   }
   unstuck(e, r) {
@@ -316,7 +320,7 @@ function genLabyrinth(map, seed) {
 function stepMachine(p, dir, z, dt, map, ss) {
   const M = MACHINES[p.m], mv = M.mv || 'normal';
   p.mvT = (p.mvT || 0) + dt;
-  let turn = 12, grip = 7, coast = 3.5, maxS = Math.min(460, 108 * ss);
+  let turn = 11, grip = 6.5, coast = 3.5, maxS = Math.min(420, 97 * ss); // 全体スピードを少し落とした
   if (mv === 'slide') { grip = 1.25; coast = .55; maxS *= 1.15; turn = 14; }      // 超すべる
   else if (mv === 'tank') { turn = 4.5; grip = 4; }                                  // 重戦車: 旋回が遅い
   else if (mv === 'brake') { grip = 18; coast = 16; }                                // ピタ止め

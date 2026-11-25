@@ -86,7 +86,7 @@ const FxObjs = {
           for (const b of o.orbs) if (!b.done) { ctx.fillStyle = o.cols[b.i % o.cols.length]; ctx.fillRect(Math.round(b.x - 2), Math.round(b.y - 2), 4, 4); ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 1), 2, 2); }
           break;
         }
-        case 'ghost': { ctx.save(); ctx.globalAlpha = (1 - k) * .45; ctx.translate(Math.round(o.x), Math.round(o.y)); ctx.rotate(o.a); ctx.drawImage(o.img, -o.img.width / 2, -o.img.height / 2); ctx.restore(); ctx.globalAlpha = 1; break; }
+        case 'ghost': { const s = o.s || 1; ctx.save(); ctx.globalAlpha = (1 - k) * .45; ctx.translate(Math.round(o.x), Math.round(o.y)); ctx.rotate(o.a); ctx.drawImage(o.img, -o.img.width * s / 2, -o.img.height * s / 2, o.img.width * s, o.img.height * s); ctx.restore(); ctx.globalAlpha = 1; break; }
         case 'spark': { ctx.strokeStyle = o.col; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2; for (const s of o.s) { const d = o.r * (.3 + k * 1.2); ctx.beginPath(); ctx.moveTo(o.x + Math.cos(s) * d * .4, o.y + Math.sin(s) * d * .4); ctx.lineTo(o.x + Math.cos(s) * d, o.y + Math.sin(s) * d); ctx.stroke(); } ctx.globalAlpha = 1; break; }
         case 'flashSpr': { ctx.globalAlpha = 1 - k; ctx.drawImage(o.img, Math.round(o.x - o.img.width / 2), Math.round(o.y - o.img.height / 2)); ctx.globalAlpha = 1; break; }
       }

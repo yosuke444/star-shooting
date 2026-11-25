@@ -76,6 +76,7 @@ const Render = {
     for (const m of V.machines) if (m.x > X0 && m.x < X1 && m.y > Y0 && m.y < Y1) this.drawFreeMachine(m, time);
     for (const e of V.enemies) if (e.x > X0 && e.x < X1 && e.y > Y0 && e.y < Y1) this.drawEnemy(e, time);
     for (const wl of V.wilds) if (wl.x > X0 && wl.x < X1 && wl.y > Y0 && wl.y < Y1) this.drawWild(wl, time);
+    this.drawTrails(V, time, X0, Y0, X1, Y1);
     for (const p of V.players) if (!p.out && p.x > X0 && p.x < X1 && p.y > Y0 && p.y < Y1) this.drawPlayer(V, p, time);
     if (V.fish) this.drawFish(V.fish, time);
     if (V.boss) this.drawBoss(V.boss, time);
@@ -186,7 +187,7 @@ const Render = {
     w.globalAlpha = .45 + Math.sin(time * 4 + m.id) * .2; w.strokeStyle = col; w.lineWidth = 2;
     w.beginPath(); w.arc(m.x, m.y, 15 + Math.sin(time * 4) * 2, 0, TAU); w.stroke(); w.globalAlpha = 1;
     if (Math.random() < .08) Particles.add(m.x + rnd(-10, 10), m.y + rnd(-6, 8), 0, -25, .6, 2, PC(col), 1);
-    this.spr(GFX.machineFree[m.m], m.x, m.y + bob - 2, m.a, false, 1.35);
+    this.spr(GFX.machineFree[m.m], m.x, m.y + bob - 2, m.a, false, 1.6);
   },
   drawEnemy(e, time) {
     const T = ENEMIES[e.tp], lv = dmgLvl(e.hp / e.mhp), img = e.flash > 0 ? GFX.enemyW[e.tp] : GFX.enemyD[e.tp][lv]; this.smoke(e.x, e.y - 2, lv, 7);
@@ -197,7 +198,7 @@ const Render = {
     // 敵は赤いオーラ
     const w = this.w, pul = .28 + Math.sin(time * 6 + e.id) * .1; w.globalAlpha = pul; w.fillStyle = '#ff2030'; w.beginPath(); w.arc(e.x, e.y + bob, 11, 0, TAU); w.fill(); w.globalAlpha = pul * 1.6; w.strokeStyle = '#ff4d4d'; w.lineWidth = 1; w.beginPath(); w.arc(e.x, e.y + bob, 12 + Math.sin(time * 8 + e.id) * 1.5, 0, TAU); w.stroke(); w.globalAlpha = 1;
     this.shadow(e.x, e.y + 8, 6, 2);
-    this.spr(img, e.x, e.y + bob, 0, e.face < 0, 1.25);
+    this.spr(img, e.x, e.y + bob, 0, e.face < 0, 1.4);
     if (e.hp < e.mhp) this.bar(e.x, e.y - 12, 12, e.hp / e.mhp, STAT_COL[T.drop < 0 ? 1 : T.drop]);
   },
   drawWild(wl, time) {
@@ -210,6 +211,28 @@ const Render = {
       for (let i = 0; i < 3; i++) { const a = time * 4 + i * TAU / 3; w.fillStyle = '#ffe14d'; w.fillRect(Math.round(wl.x + Math.cos(a) * 9) - 1, Math.round(wl.y - 12 + Math.sin(a) * 3) - 1, 3, 3); }
     } else if (wl.mhp) this.bar(wl.x, wl.y - 13, 16, wl.hp / wl.mhp, '#3dffe0');
   },
+  // 流れ星のような光の軌跡: 速いほど長く・濃く残る。伝説マシンは虹色
+  drawTrails(V, time, X0, Y0, X1, Y1) {
+    const w = this.w;
+    w.globalCompositeOperation = 'lighter'; w.lineCap = 'round';
+    for (const p of V.players) {
+      const T = p._tr || (p._tr = []), sp = Math.hypot(p.vx || 0, p.vy || 0);
+      if (!p.out && p.dead <= 0 && sp > 35) { const l = T[T.length - 1]; if (!l || d2(l.x, l.y, p.x, p.y) > 9) T.push({ x: p.x, y: p.y, t: time, life: .12 + Math.min(1, sp / 300) * .75, s: sp }); }
+      else if (p.dead > 0) T.length = 0;
+      while (T.length && time - T[0].t > T[0].life) T.shift();
+      if (T.length < 2 || p.x < X0 || p.x > X1 || p.y < Y0 || p.y > Y1) continue;
+      const M = MACHINES[p.m], col = hexRGB(M.col);
+      for (let i = 1; i < T.length; i++) {
+        const a = T[i - 1], b = T[i], k = 1 - (time - b.t) / b.life; if (k <= 0) continue;
+        const c = M.legend ? hexRGB(PAL[RAINBOW[(i + Math.floor(time * 12)) % 8]]) : col;
+        w.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${.55 * k})`; w.lineWidth = 1 + 5 * k * Math.min(1, b.s / 250);
+        w.beginPath(); w.moveTo(a.x, a.y); w.lineTo(b.x, b.y); w.stroke();
+        w.strokeStyle = `rgba(255,255,255,${.5 * k * k})`; w.lineWidth = 1 + 1.5 * k; w.beginPath(); w.moveTo(a.x, a.y); w.lineTo(b.x, b.y); w.stroke();
+      }
+      if (sp > 160 && Math.random() < sp / 500) Particles.add(p.x + rnd(-4, 4), p.y + rnd(-4, 4), rnd(-15, 15), rnd(-15, 15), rnd(.3, .7), 2, M.legend ? RAINBOW[(Math.random() * 8) | 0] : C_WHITE, 2);
+    }
+    w.globalCompositeOperation = 'source-over'; w.lineCap = 'butt';
+  },
   drawPlayer(V, p, time) {
     const w = this.w, M = MACHINES[p.m], big = M.big;
     if (p.dead > 0) { // 残骸
@@ -218,7 +241,7 @@ const Render = {
     }
     const col = PLAYER_COLS[p.col];
     // プレイヤーカラーの足元リング
-    w.globalAlpha = .9; w.strokeStyle = col; w.lineWidth = 1; w.beginPath(); w.ellipse(p.x, p.y + 3, big ? 15 : 9, big ? 7 : 4, 0, 0, TAU); w.stroke(); w.globalAlpha = 1;
+    w.globalAlpha = .9; w.strokeStyle = col; w.lineWidth = 1; w.beginPath(); w.ellipse(p.x, p.y + 4, big ? 18 : 13, big ? 8 : 5.5, 0, 0, TAU); w.stroke(); w.globalAlpha = 1;
     this.shadow(p.x, p.y + (big ? 9 : 6), big ? 12 : 6, big ? 3.5 : 2.5);
     // 排気
     const spd = Math.hypot(p.vx || 0, p.vy || 0);
@@ -226,9 +249,9 @@ const Render = {
     if (M.legend && Math.random() < .3) Particles.add(p.x + rnd(-6, 6), p.y + rnd(-6, 6), 0, -15, .6, 2, RAINBOW[(Math.random() * 8) | 0], 1);
     const blink = p.inv > 0 && Math.floor(time * 15) % 2;
     // 残像(疾走感)
-    if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.aim ?? p.a, life: .16 });
+    if (spd > 90 && !blink && ((time * 60) | 0) % 2 === 0) FxObjs.add({ type: 'ghost', img: GFX.machine[p.m], x: p.x, y: p.y, a: p.aim ?? p.a, s: big ? 2.1 : 1.45, life: .16 });
     const plv = dmgLvl(p.hp / 100); this.smoke(p.x, p.y, plv, big ? 10 : 7);
-    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machineD[p.m][plv], p.x, p.y, p.aim ?? p.a, false, big ? 1.65 : 1);
+    if (!blink) this.spr(p.flash > 0 ? GFX.machineW[p.m] : GFX.machineD[p.m][plv], p.x, p.y, p.aim ?? p.a, false, big ? 2.1 : 1.45); // 全員サイズアップ
     // バフ
     if (p.buf) {
       if (p.buf.bar > 0) { w.globalAlpha = .35 + Math.sin(time * 10) * .15; w.fillStyle = '#8ad0ff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.fill(); w.globalAlpha = 1; w.strokeStyle = '#ffffff'; w.beginPath(); w.arc(p.x, p.y, 13, 0, TAU); w.stroke(); }
@@ -240,7 +263,7 @@ const Render = {
     // 集めたレジェンドパーツは、完成形の位置(左翼・右翼・頭首)に組み上がるように機体の周りへ表示
     if (partsN(p) > 0) {
       for (let k = 0; k < 3; k++) {
-        if (!p.parts[k]) continue; const li = Math.max(0, LEGEND_IDS.indexOf(V.legendOrder ? V.legendOrder[k] : LEGEND_IDS[k])), sc = 1.75, bob = Math.sin(time * 3 + k) * 1.5;
+        if (!p.parts[k]) continue; const li = Math.max(0, LEGEND_IDS.indexOf(V.legendOrder ? V.legendOrder[k] : LEGEND_IDS[k])), sc = 2.4, bob = Math.sin(time * 3 + k) * 1.5;
         w.globalAlpha = .35; w.drawImage(GFX.legendUp[li], Math.round(p.x - GFX.legendUp[li].width * sc / 2), Math.round(p.y - GFX.legendUp[li].height * sc / 2 + bob), GFX.legendUp[li].width * sc, GFX.legendUp[li].height * sc); w.globalAlpha = 1;
         for (let piece = 0; piece < 3; piece++) if (p.parts[k] & (1 << piece)) { const pc = GFX.legendPieces[li][piece]; w.globalAlpha = .9; w.drawImage(pc, Math.round(p.x - pc.width * sc / 2), Math.round(p.y - pc.height * sc / 2 + bob), pc.width * sc, pc.height * sc); w.globalAlpha = 1; }
         if (Math.random() < .2) Particles.add(p.x + rnd(-14, 14), p.y + rnd(-16, 14), 0, -20, .5, 2, RAINBOW[(Math.random() * 8) | 0], 1);

@@ -57,7 +57,7 @@ const MACHINES = [
 // 性能を尖らせる: 得意はより得意に、苦手はより苦手に(ミニノーマルは全部苦手のまま)
 MACHINES.forEach((M, i) => { M.mul = M.mul.map(v => i === 0 ? .75 : clamp(+(1 + (v - 1) * 1.9).toFixed(2), .35, 2.6)); });
 // ゲームスピードアップ: 弾速 x1.3 / 連射 x0.85 (射程はやや伸びる)
-for (const k in SHOTS) { const S = SHOTS[k]; S.spd *= 1.3; S.life *= .88; S.rate *= .85; }
+for (const k in SHOTS) { const S = SHOTS[k]; S.spd *= 1.17; S.life *= .98; S.rate *= .92; } // ゲームスピードは少しだけ控えめに
 // ---- バランス調整(CPU同士の対戦シミュレーション結果より) ----
 // 強すぎ → 長所は残して短所をさらに短所に / 弱すぎ → 長所をさらに長所に
 const BALANCE = {
