@@ -88,6 +88,7 @@ const FxObjs = {
         }
         case 'ghost': { const s = o.s || 1; ctx.save(); ctx.globalAlpha = (1 - k) * .45; ctx.translate(Math.round(o.x), Math.round(o.y)); ctx.rotate(o.a); ctx.drawImage(o.img, -o.img.width * s / 2, -o.img.height * s / 2, o.img.width * s, o.img.height * s); ctx.restore(); ctx.globalAlpha = 1; break; }
         case 'spark': { ctx.strokeStyle = o.col; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2; for (const s of o.s) { const d = o.r * (.3 + k * 1.2); ctx.beginPath(); ctx.moveTo(o.x + Math.cos(s) * d * .4, o.y + Math.sin(s) * d * .4); ctx.lineTo(o.x + Math.cos(s) * d, o.y + Math.sin(s) * d); ctx.stroke(); } ctx.globalAlpha = 1; break; }
+        case 'iconBurst': { const s = 1.5 + k * 3.5; ctx.globalAlpha = 1 - k; ctx.drawImage(o.img, Math.round(o.x - o.img.width * s / 2), Math.round(o.y - o.img.height * s / 2), o.img.width * s, o.img.height * s); ctx.globalAlpha = 1; break; }
         case 'flashSpr': { ctx.globalAlpha = 1 - k; ctx.drawImage(o.img, Math.round(o.x - o.img.width / 2), Math.round(o.y - o.img.height / 2)); ctx.globalAlpha = 1; break; }
       }
     }
@@ -150,7 +151,12 @@ const FX = {
       case 'ride': if (b === me) UI.nameCard(a); FxObjs.add({ type: 'ring', x, y, r0: 50, r1: 6, w: 4, col: MACHINES[a].col, life: .4 }); FxObjs.add({ type: 'ring', x, y, r0: 4, r1: 60, w: 3, col: '#ffffff', life: .5 }); Particles.burst(x, y, 40, 160, .8, 3, [PC(MACHINES[a].col), C_YEL, C_WHITE]); if (b === me) { Sound.play('ride', 1); this.flash = .15; this.flashCol = MACHINES[a].col; } break;
       case 'spawn': FxObjs.add({ type: 'ring', x, y, r0: 60, r1: 4, w: 4, col: '#ffffff', life: .5 }); Particles.burst(x, y, 24, 100, .6, 3, C_WHITE); if (a === me) Sound.play('ride', 1); break;
       case 'buff': { const col = STAT_COL[a]; FxObjs.add({ type: 'ring', x, y, r0: 4, r1: 44, w: 4, col, life: .5 }); FxObjs.add({ type: 'ring', x, y, r0: 4, r1: 28, w: 2, col: '#ffffff', life: .3 }); Particles.burst(x, y, 28, 120, .7, 3, [PC(col), C_WHITE], 2, -60); Sound.play('item', v); Sound.play('whoosh', v * .8); break; }
-      case 'use': Sound.play('item', v); break;
+      case 'use': { // アイテムを使った: マシンを中心にアイコンが弾ける
+        const key = ITEM_KEYS[a], it = ITEMS[key], sc = { jet: 1, dumb: 0, glass: 3, bar: 2 }[it.icon], col = sc !== undefined ? STAT_COL[sc] : RAR_COL[it.rar];
+        FxObjs.add({ type: 'iconBurst', img: GFX.itemUI[key], x, y, life: .5 }); FxObjs.add({ type: 'ring', x, y, r0: 6, r1: 60, w: 5, col, life: .45 }); FxObjs.add({ type: 'ring', x, y, r0: 4, r1: 36, w: 3, col: '#ffffff', life: .3 });
+        Particles.burst(x, y, 36, 220, .7, 3, [PC(col), C_WHITE], 2); Sound.play('item', Math.max(v, b === me ? 1 : 0)); if (b === me) { this.stop(.05); this.addShake(4); }
+        break;
+      }
       case 'slash': FxObjs.add({ type: 'slash', x, y, a: a / 100, life: .25 }); Particles.burst(x + Math.cos(a / 100) * 40, y + Math.sin(a / 100) * 40, 30, 200, .4, 3, [C_WHITE, C_RED, C_YEL]); Sound.play('slash', Math.max(v, .2)); if (v > .3) { this.addShake(7); this.stop(.06); this.kick(.06); } break;
       case 'bomb': case 'bigbomb': {
         const big = type === 'bigbomb';

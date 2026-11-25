@@ -162,7 +162,7 @@ const Events = {
   s_star(g, c) { c.spawn = 0; },
   u_star(g, c, dt) {
     c.spawn -= dt;
-    if (c.spawn <= 0 && c.t > 1.2) { c.spawn = c.dur / (g.n() * 4); const pos = g.map.freePos(6); g.meteors.push({ id: g.id(), x: pos.x, y: pos.y, t: 0, fall: 1.1, r: 0, big: 0, kind: 2 }); }
+    if (c.spawn <= 0 && c.t > 1.2) { c.spawn = c.dur / (g.n() * 3); const pos = g.map.freePos(6); g.meteors.push({ id: g.id(), x: pos.x, y: pos.y, t: 0, fall: 1.1, r: 0, big: 0, kind: 2 }); }
   },
   landMeteor(g, m) {
     if (m.kind === 2) { g.fx('starLand', m.x, m.y); g.scatter(m.x, m.y, Math.random() < .3 ? [rndi(0, 3), rndi(0, 3)] : [rndi(0, 3)], 40); return; }
@@ -258,14 +258,14 @@ const Events = {
     c.region = rndi(0, 8); const rx = c.region % 3, ry = Math.floor(c.region / 3);
     c.area = { x0: g.map.w * rx / 3, y0: g.map.h * ry / 3, x1: g.map.w * (rx + 1) / 3, y1: g.map.h * (ry + 1) / 3 };
     c.x = (c.area.x0 + c.area.x1) / 2; c.y = (c.area.y0 + c.area.y1) / 2; c.spawn = 0; c.made = 0;
-    for (let i = 0; i < 7 + g.n() / 5; i++) this.rushGroup(g, c); /* ラッシュは控えめに */
+    for (let i = 0; i < 4 + g.n() / 8; i++) this.rushGroup(g, c); /* ラッシュは控えめに */
   },
   rushGroup(g, c) {
     const A = c.area; let pos;
     for (let i = 0; i < 30; i++) { pos = { x: rnd(A.x0 + 30, A.x1 - 30), y: rnd(A.y0 + 30, A.y1 - 30) }; if (!g.map.hitBox(pos.x, pos.y, 10)) break; }
-    g.spawnEnemyGroup(pos, [rndi(0, 3), rndi(0, 3)], rndi(3, 5)); c.made++;
+    g.spawnEnemyGroup(pos, [rndi(0, 3), rndi(0, 3)], rndi(2, 4)); c.made++;
   },
-  u_rush(g, c, dt) { c.spawn -= dt; if (c.spawn <= 0) { c.spawn = 1.3; if (g.enemies.length < g.enemyTarget() + 70) this.rushGroup(g, c); } },
+  u_rush(g, c, dt) { c.spawn -= dt; if (c.spawn <= 0) { c.spawn = 2.2; if (g.enemies.length < g.enemyTarget() + 35) this.rushGroup(g, c); } },
 
   // ---------- ビッグボール ----------
   s_ball(g, c) {

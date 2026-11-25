@@ -47,7 +47,7 @@ const UI = {
   banners: [], feed: [], floats: [], prevEvt: null, prevPhase: null, sparks: [],
   reset() {
     this.popQ = []; this.pops = []; this.dmgs = []; this.killPop = null; this.combo = 0; this.banners = []; this.feed = []; this.floats = []; this.prevEvt = null; this.prevPhase = null; this.sparks = [];
-    this.lastRou = -1; this.resultDone = false; this.card = null; this.ko = null; this.legendShow = null; this.timeAnn = {}; this.pinchT = 0; this.prevSt = null; this.bump = [0, 0, 0, 0]; this.resStart = null; this.resStep = -1; this.flyers = [];
+    this.prevBuf = null; this.lastRou = -1; this.resultDone = false; this.card = null; this.ko = null; this.legendShow = null; this.timeAnn = {}; this.pinchT = 0; this.prevSt = null; this.bump = [0, 0, 0, 0]; this.resStart = null; this.resStep = -1; this.flyers = [];
   },
   // 画面ど真ん中に出すカットイン
   banner(txt, sub, col, big = true, life = 3) {
@@ -77,6 +77,12 @@ const UI = {
     }
     // ステータスが増えたら数字をはずませる
     const me = V.players[Render.meId];
+    // 強化アイテム: 使った時と切れた時に文字を出す
+    if (me && me.buf) {
+      const pb = this.prevBuf || {}; const NAME = { jet: 'スピードUP', dumb: 'アタックUP', glass: 'レンジUP', bar: '無敵' }, COL = { jet: STAT_COL[1], dumb: STAT_COL[0], glass: STAT_COL[3], bar: STAT_COL[2] };
+      for (const k in NAME) { const on = me.buf[k] > 0, was = pb[k] > 0; if (on && !was) this.floats.push({ s: NAME[k] + '!', col: COL[k], t: 0, big: 1 }); if (!on && was) { this.floats.push({ s: NAME[k] + ' 終了', col: '#aaaaaa', t: 0 }); Sound.play('back', .7); } }
+      this.prevBuf = Object.assign({}, me.buf);
+    }
     if (me && me.st) { if (this.prevSt) for (let i = 0; i < 4; i++) if (me.st[i] > this.prevSt[i]) this.bump[i] = .45; this.prevSt = me.st.slice(); }
   },
   onGfx(a, V) {
@@ -114,7 +120,7 @@ const UI = {
   nameCard(m) { this.card = { m, t: 0, life: 1.9 }; },
   addNotes(notes) {
     for (const [s, col, ic] of notes) {
-      if (ic) { this.popQ.push({ col, ic }); continue; }
+      if (ic) { this.popQ.push({ s: s || '', col, ic }); continue; }
       if (s) { this.floats.push({ s, col, t: 0 }); if (this.floats.length > 3) this.floats.shift(); }
     }
   },
@@ -128,11 +134,13 @@ const UI = {
   },
   update(dt) {
     this.popT -= dt; this.comboT -= dt;
-    if (this.popQ.length && this.popT <= 0) {
-      const p = this.popQ.shift(); this.combo = this.comboT > 0 ? this.combo + 1 : 0; this.comboT = .9; p.t = 0;
-      p.life = this.popQ.length > 3 ? .32 : this.popQ.length ? .45 : .75; // たくさん取った時は1個あたり短く
+    // 撃破演出の間は取得表示を止めておき、終わってから一気に出す
+    if (this.popQ.length && this.popT <= 0 && !this.ko) {
+      const p = this.popQ.shift(), kind = p.ic[0]; p.t = 0;
+      if (kind === 'p') { p.life = 2; this.popT = 1.2; Sound.play('part', 1); }                       // パーツは長めに・専用の旋律
+      else if (kind === 'i' || kind === 'k') { p.life = 1; this.popT = .45; Sound.play('item', 1); Sound.combo(this.combo); }
+      else { this.combo = this.comboT > 0 ? this.combo + 1 : 0; this.comboT = .9; p.life = this.popQ.length > 3 ? .32 : this.popQ.length ? .45 : .75; this.popT = p.life * .55; Sound.combo(this.combo); } // たくさん取った時は1個あたり短く
       this.pops.push(p); if (this.pops.length > 4) this.pops.shift();
-      Sound.combo(this.combo); this.popT = p.life * .55;
       if (p.ic[0] === 's') this.flyers.push({ i: +p.ic[1], t: 0 });
     }
     for (const p of this.pops) p.t += dt; this.pops = this.pops.filter(p => p.t < p.life);
@@ -224,7 +232,15 @@ const UI = {
       const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, 70); gr.addColorStop(0, `rgba(${r},${g},${b},.55)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`); ctx.fillStyle = gr; ctx.fillRect(cx - 70, cy - 70, 140, 140);
       rays(ctx, cx, cy, 18, 64 * pop, 12, p.col, time * 2, .4 * out);
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.globalAlpha = (1 - k) * out; ctx.beginPath(); ctx.arc(cx, cy, 18 + k * 50, 0, TAU); ctx.stroke(); ctx.globalAlpha = out;
-      const img = this.popIcon(V, p.ic), sc = 4 * pop; ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
+      const kind = p.ic[0], img = this.popIcon(V, p.ic), sc = (kind === 'p' ? 5 : kind === 'i' ? 4.6 : 4) * pop; ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
+      if (kind === 'i' || kind === 'k') txt(ctx, p.s.replace(/ ?ゲット!|!$/g, ''), cx, cy + 40, 16, p.col, 'center', 4);
+      if (kind === 'p') { // パーツ: 完成形のシルエットに今の集まり具合を重ねる
+        const idx = +p.ic.slice(1), k2 = Math.floor(idx / 3), me2 = V.players[Render.meId], li = V.legendOrder ? LEGEND_IDS.indexOf(V.legendOrder[k2]) : k2, up = GFX.legendUp[li], s2 = 3.2;
+        ctx.globalAlpha = out * .3; ctx.drawImage(up, cx - 120 - up.width * s2 / 2, cy - up.height * s2 / 2, up.width * s2, up.height * s2); ctx.globalAlpha = out;
+        for (let i = 0; i < 3; i++) if (me2 && me2.parts[k2] & (1 << i)) ctx.drawImage(GFX.legendPieces[li][i], cx - 120 - up.width * s2 / 2, cy - up.height * s2 / 2, up.width * s2, up.height * s2);
+        txt(ctx, 'LEGEND PARTS', cx, cy - 46, 14, '#ffe14d', 'center', 4); txt(ctx, p.s, cx, cy + 44, 18, p.col, 'center', 5);
+        txt(ctx, (me2 ? bits3(me2.parts[k2]) : 0) + '/3', cx + 110, cy, 30, '#ffffff', 'center', 6);
+      }
       ctx.restore();
     }
     // ステータス欄へ飛んでいく
@@ -268,10 +284,11 @@ const UI = {
       else if (L.mid === 13) { if (Math.random() < .25) FxObjs.add({ type: 'ring', x: p.x, y: p.y, r0: 10, r1: 120, w: 5, col: '#3d9bff', life: .8 }); for (let i = 0; i < 4; i++) { const a = -time * 5 + i * 1.6; Particles.add(p.x + Math.cos(a) * 50, p.y + Math.sin(a) * 50, Math.cos(a + 1.6) * 80, Math.sin(a + 1.6) * 80, .7, 4, PC('#9ae8ff'), 1); } }
       else { if (Math.floor(t * 3) !== Math.floor((t - .016) * 3)) { FxObjs.add({ type: 'ring', x: p.x, y: p.y, r0: 10, r1: 160, w: 10, col: '#a03dff', life: .7 }); FX.addShake(10); Sound.play('bigboom', .6); } }
     }
+    if (L.pid === Render.meId) return; // 自分が完成させた時は文字の帯を出さない(演出を見せる)
     ctx.save();
     const inK = Math.min(1, t / .3), out = k > .85 ? (1 - k) / .15 : 1; ctx.globalAlpha = out;
-    // 斜めの帯
-    ctx.translate(W / 2, H / 2); ctx.rotate(-.12);
+    // 斜めの帯(演出が見えるよう画面の下寄りに)
+    ctx.translate(W / 2, H - 112); ctx.rotate(-.06); ctx.scale(.72, .72);
     const bw = W * 1.4 * inK; ctx.fillStyle = 'rgba(10,8,24,.85)'; ctx.fillRect(-bw / 2, -95, bw, 190);
     for (let i = 0; i < 8; i++) { ctx.fillStyle = PAL[RAINBOW[(i + Math.floor(time * 10)) % 8]]; ctx.fillRect(-bw / 2, -95 + i * 2, bw, 2); ctx.fillRect(-bw / 2, 81 + i * 2, bw, 2); }
     const img = GFX.legendUp[LEGEND_IDS.indexOf(L.mid)], s = 9, sx = -260 + (1 - Math.min(1, t / .45)) * -500;
@@ -392,7 +409,7 @@ const UI = {
   drawFloats(ctx, V) {
     const me = V.players[Render.meId]; if (!me) return;
     const x = Render.sx(me.x), y = Render.sy(me.y) - 56;
-    this.floats.forEach((f, i) => { const k = f.t / 1.4; ctx.globalAlpha = k > .7 ? (1 - k) / .3 : 1; txt(ctx, f.s, x, y - (this.floats.length - 1 - i) * 20 - f.t * 16, 16, f.col, 'center', 4); });
+    this.floats.forEach((f, i) => { const k = f.t / 1.4, s = f.big && f.t < .15 ? 1.6 - f.t * 4 : 1; ctx.globalAlpha = k > .7 ? (1 - k) / .3 : 1; ctx.save(); ctx.translate(x, y - (this.floats.length - 1 - i) * 22 - f.t * 16); ctx.scale(s, s); txt(ctx, f.s, 0, 0, f.big ? 22 : 16, f.col, 'center', 5); ctx.restore(); });
     ctx.globalAlpha = 1;
   },
 

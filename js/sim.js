@@ -144,11 +144,11 @@ class Game {
     if (left.length) this.scatter(p.x, p.y, left, 50);
   }
   applyPickup(p, k) {
-    if (k < PK_ITEM) { const g = this.addStat(p, k); this.note(p, g ? STAT_NAME[k] + ' UP!' : STAT_NAME[k] + ' MAX', STAT_COL[k], 's' + k); return true; }
+    if (k < PK_ITEM) { const g = this.addStat(p, k); this.note(p, STAT_NAME[k] + ' UP!', STAT_COL[k], 's' + k); return true; }
     if (isPart(k)) { this.gainPart(p, Math.floor((k - PK_PART) / 3), (k - PK_PART) % 3); return true; }
     if (k === PK_KEY) { if (p.key) return false; p.key = true; this.note(p, '鍵をゲット!', '#ffe14d', 'k'); this.gfxEv('key', p.id); return true; }
     const key = ITEM_KEYS[k - PK_ITEM], it = ITEMS[key];
-    if (it.rar === 'N') { this.activate(p, key); this.note(p, it.name + '!', RAR_COL.N, 'i' + key); return true; }
+    if (it.rar === 'N') { this.activate(p, key); this.fx('use', p.x, p.y, ITEM_KEYS.indexOf(key), p.id); this.note(p, it.name + '!', RAR_COL.N, 'i' + key); return true; }
     if (key === 'tv') { p.tv = true; this.note(p, '番組表ゲット!', RAR_COL.SR, 'itv'); return true; }
     if (p.items.length >= 2) return false;
     p.items.push({ k: key, n: it.uses || 1 }); this.note(p, it.name + ' ゲット!', RAR_COL.R, 'i' + key); return true;
@@ -174,16 +174,16 @@ class Game {
       case 'mdumb': case 'dumb': p.buf.dumb = Math.max(p.buf.dumb, it.dur); this.fx('buff', p.x, p.y, 0); break;
       case 'mglass': case 'glass': p.buf.glass = Math.max(p.buf.glass, it.dur); this.fx('buff', p.x, p.y, 3); break;
       case 'mbar': case 'bar': p.buf.bar = Math.max(p.buf.bar, it.dur); this.fx('buff', p.x, p.y, 2); break;
-      case 'mbomb': this.explode(p.x, p.y, 48, 14 * p.sa, p.id, 0); break;
-      case 'bbomb': this.explode(p.x, p.y, 105, 32 * p.sa, p.id, 1); break;
+      case 'mbomb': this.explode(p.x, p.y, 62, 26 * p.sa, p.id, 0); break;
+      case 'bbomb': this.explode(p.x, p.y, 130, 66 * p.sa, p.id, 1); break;
     }
   }
   useItem(p) {
     const it = p.items[0]; if (!it) return;
     if (it.k === 'sword') {
       it.n--; p.slash = .25; this.fx('slash', p.x, p.y, Math.round(p.a * 100));
-      const dmg = 34 * p.sa;
-      this.forTargets(p.x, p.y, 62, (o, kind) => {
+      const dmg = 62 * p.sa;
+      this.forTargets(p.x, p.y, 78, (o, kind) => {
         if (kind === 1 && o.id === p.id) return; const a = Math.atan2(o.y - p.y, o.x - p.x);
         if (Math.abs(angDiff(p.a, a)) < 1.25 || d2(o.x, o.y, p.x, p.y) < 18 * 18) this.hit(o, kind, dmg, p.id, p.x, p.y);
       });
@@ -192,7 +192,7 @@ class Game {
     }
     p.items.shift();
     if (it.k === 'arrow') { p.arw = { t: 5, a: p.a, lock: 1 }; this.fx('arrowStart', p.x, p.y, p.id); this.gfxEv('arrow', p.id); return; }
-    this.activate(p, it.k); this.fx('use', p.x, p.y, ITEM_KEYS.indexOf(it.k));
+    this.activate(p, it.k); this.fx('use', p.x, p.y, ITEM_KEYS.indexOf(it.k), p.id);
   }
   explode(x, y, r, dmg, src, big) {
     this.fx(big ? 'bigbomb' : 'bomb', x, y, r);
@@ -200,7 +200,7 @@ class Game {
   }
   // ビッグアロー: 太い光線が 0.6 秒残って 6 回ヒット(防御特化以外はほぼ確殺)
   fireArrow(p, first) {
-    const B = p.beam, ca = Math.cos(B.a), sa = Math.sin(B.a), half = 26, dmg = 46 * p.sa;
+    const B = p.beam, ca = Math.cos(B.a), sa = Math.sin(B.a), half = 26, dmg = 68 * p.sa;
     if (first) this.fx('beam', B.x, B.y, Math.round(B.a * 1000));
     const test = (o, r) => { const dx = o.x - B.x, dy = o.y - B.y, along = dx * ca + dy * sa; if (along < 0) return false; const perp = Math.abs(-dx * sa + dy * ca); return perp < half + r; };
     for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, B.x, B.y);
@@ -285,7 +285,7 @@ class Game {
     e.hp -= dmg; e.flash = .14; if (src >= 0) e.aggro = src;
     if (e.hp <= 0) {
       const T = ENEMIES[e.tp]; this.fx('pop', e.x, e.y, e.tp);
-      const st = T.drop < 0 ? rndi(0, 3) : T.drop; const codes = Math.random() < .6 ? [st] : []; /* ステータスは出すぎないよう 6 割 */
+      const st = T.drop < 0 ? rndi(0, 3) : T.drop; const codes = Math.random() < .5 ? [st] : []; /* ステータスは出すぎないよう 6 割 */
       if (Math.random() < .05) codes.push(this.rollItem(false));
       // 倒した人(どんなに遠くても)がドロップの半分を受け取る
       const P = src >= 0 ? this.players[src] : null;
@@ -302,8 +302,8 @@ class Game {
     const P = who >= 0 ? this.players[who] : null;
     let loot;
     switch (c.type) {
-      case 'B': loot = this.makeLoot(rndi(1, 2), .3, .12, .01, .02); break;
-      case 'A': loot = this.makeLoot(rndi(2, 4), .55, .5, .07, .07); break;
+      case 'B': loot = this.makeLoot(Math.random() < .7 ? 1 : 2, .3, .12, .01, .02); break;
+      case 'A': loot = this.makeLoot(rndi(2, 3), .55, .5, .07, .07); break;
       case 'G': loot = this.makeLoot(Math.random() < .7 ? 1 : 0, .15, .03); break;
       case 'O': loot = this.makeLoot(rndi(6, 8), .8, .9, .35, .1); loot.push(this.rollItem(true)); break;
       case 'L': loot = this.makeLoot(rndi(5, 7), 1, 1, .3, .15); loot.push(this.rollItem(true)); break;
@@ -317,7 +317,7 @@ class Game {
 
   // ---------- マシン乗り換え ----------
   board(p, fm, wild) {
-    const M = MACHINES[p.m], gain = Math.min(4, Math.floor(p.ride / 15));
+    const M = MACHINES[p.m], gain = Math.min(4, Math.floor(p.ride / 18));
     const got = [0, 0, 0, 0];
     for (let i = 0; i < gain; i++) { const w = M.mul.map(v => v * v * v); let r = Math.random() * w.reduce((a, b) => a + b); let k = 0; while ((r -= w[k]) > 0) k++; got[k] += this.addStat(p, k); }
     this.fx('mexp', p.x, p.y, p.m);
@@ -429,7 +429,7 @@ class Game {
     p.inv = Math.max(0, p.inv - dt); p.cd -= dt; p.ride += dt;
     if (p.beam) { p.beam.t += dt; if (p.beam.t >= .1) { p.beam.t = 0; this.fireArrow(p); if (--p.beam.n <= 0) p.beam = null; } }
     for (const k in p.buf) p.buf[k] = Math.max(0, p.buf[k] - dt);
-    if (MACHINES[p.m].legend && p.hp < 100) p.hp = Math.min(100, p.hp + 1.2 * dt);
+    if (MACHINES[p.m].legend && p.hp < 100) p.hp = Math.min(100, p.hp + 1.5 / HP_SCALE * dt); // 伝説マシンの回復: 実数で毎秒 1.5
     const frozen = this.phase === 'battle' && (this.count > 0 || this.over);
     const m = frozen ? 0 : (p.mask | (p.latch | 0)), pm = p.pmask; p.pmask = m; p.latch = 0;
     const dir = frozen ? null : p.cpu ? p.aiDir : maskDir(m); // カウントダウン中は CPU も動けない
@@ -471,7 +471,7 @@ class Game {
     const mv = MACHINES[p.m].mv, ram = (mv === 'tank' || (mv === 'dash' && p.dashT > 0)) && Math.hypot(p.vx, p.vy) > 55, rr = MACHINES[p.m].big ? 18 : 14;
     this.grid.each(p.x, p.y, o => {
       if (o._k === 1 && o !== p) { const dd = d2(o.x, o.y, p.x, p.y); if (dd < 144 && dd > .01) { const d = Math.sqrt(dd), push = (12 - d) * .5; p.x -= (o.x - p.x) / d * push; p.y -= (o.y - p.y) / d * push; } }
-      if (ram && (o._k === 1 || o._k === 2) && o !== p && !(o.ramT > this.elapsed) && d2(o.x, o.y, p.x, p.y) < rr * rr) { o.ramT = this.elapsed + .5; this.hit(o, o._k, (mv === 'tank' ? 16 : 13) * p.sa, p.id, p.x, p.y); this.fx('ram', o.x, o.y, p.m); const a = Math.atan2(o.y - p.y, o.x - p.x); o.vx = Math.cos(a) * 240; o.vy = Math.sin(a) * 240; }
+      if (ram && (o._k === 1 || o._k === 2) && o !== p && !(o.ramT > this.elapsed) && d2(o.x, o.y, p.x, p.y) < rr * rr) { o.ramT = this.elapsed + .5; this.hit(o, o._k, (mv === 'tank' ? 16 : 8) * p.sa, p.id, p.x, p.y); this.fx('ram', o.x, o.y, p.m); const a = Math.atan2(o.y - p.y, o.x - p.x); o.vx = Math.cos(a) * 240; o.vy = Math.sin(a) * 240; }
     });
     // 鍵付き宝箱
     if (p.key) for (const c of this.chests) if (c.type === 'L' && d2(c.x, c.y, p.x, p.y) < 22 * 22) { p.key = false; this.openChest(c, p.id); this.gfxEv('unlock', p.id); break; }
@@ -525,7 +525,7 @@ class Game {
       if (!b.pierce) { alive = false; return true; }
       return false;
     };
-    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 16 : 8) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
+    this.grid.each(b.x, b.y, o => tryHit(o, o._k, o._k === 1 ? (MACHINES[o.m].big ? 19 : 8) : o._k === 3 ? (o.type === 'O' ? 12 : o.type === 'A' || o.type === 'L' ? 9 : 7) : o._k === 6 ? 8 : 6));
     if (alive && own >= 0) {
       if (this.boss) tryHit(this.boss, 4, 38);
       if (alive && this.fish) tryHit(this.fish, 5, 42);

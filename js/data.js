@@ -5,7 +5,7 @@
 const STAT_NAME = ['アタック', 'スピード', 'ディフェンス', 'レンジ'];
 const STAT_SHORT = ['ATK', 'SPD', 'DEF', 'RNG'];
 const STAT_COL = ['#ff5a4d', '#4dc3ff', '#5fe36a', '#ffd23f'];
-const STAT_CAP = 30;
+const STAT_CAP = Infinity; // ステータスの上限なし
 const PLAYER_COLS = ['#ff4d6d', '#4d9bff', '#ffd23f', '#5fe36a', '#c86bff', '#ff9b3d', '#3dffe0', '#ff7ad9',
   '#b0ff3d', '#ffffff', '#ff3d3d', '#3d5bff', '#ffb0b0', '#9bffb0', '#ffe8a0', '#a0d8ff'];
 
@@ -25,7 +25,7 @@ const SHOTS = {
   laser: { rate: .45, n: 1, sp: 0, spd: 540, life: .4, dmg: 8, r: 2.5, k: 'b', col: 10, pierce: 1, trail: 1 },
   spread3: { rate: .3, n: 3, sp: .26, spd: 230, life: .52, dmg: 4.6, r: 2, k: 'b', col: 11 },
   phoenix: { rate: .08, n: 2, jit: .3, spd: 270, life: .27, dmg: 4.4, r: 3.5, k: 'flame', col: 12 },
-  levia: { rate: .32, n: 1, sp: 0, spd: 430, life: .72, dmg: 13, r: 4, k: 'b', col: 13, pierce: 1, trail: 1, big: 1 },
+  levia: { rate: .075, n: 2, jit: .4, varSpd: 1, spd: 410, life: .95, dmg: 4.6, r: 3, k: 'b', col: 13, trail: 1 }, // ばらつきのある遠距離拡散を乱れ撃ち
   cerb: { rate: .42, n: 3, sp: .32, spd: 205, life: .62, dmg: 9, r: 3.5, k: 'b', col: 14, big: 1 },
   enemy: { rate: 1.6, n: 1, sp: 0, spd: 110, life: 1.6, dmg: 5, r: 3, k: 'b', col: 15 },
 };
@@ -65,23 +65,23 @@ const BALANCE = {
   2: [.81, 2.6, .43, 1],       // ジェットスター: スピードを伸ばす + 連射・弾の威力UP
   3: [1.4, .55, 2.2, .4],      // フォートレス(遅すぎたのでスピードを少し戻した): アタック・ディフェンスと砲弾威力を伸ばす(スピード・レンジ・連射は苦手のまま)
   4: [1.8, .65, .45, 2.4],     // スナイパー: スピード・ディフェンスをさらに苦手に + 一発の威力UP
-  5: [1.85, 1.38, .38, .2],    // スラッシャー: ディフェンス・レンジ(斬撃の届く範囲)をさらに苦手に
+  5: [1.85, 1.38, .32, .2],    // スラッシャー: ディフェンス・レンジ(斬撃の届く範囲)をさらに苦手に
   6: [.9, 1, .9, 2.4],         // ホーミー: レンジを伸ばす + 追尾性能・弾速・威力UP
   7: [1.45, 1.38, .81, 1.38],  // ウェーブライダー: 得意3つを伸ばす
   8: [1.6, 1.19, 1, .81],      // ブーメラン: アタックを伸ばす
   9: [1.48, .7, 1.19, .25],    // スキャッター: スピード・レンジをさらに苦手に
   10: [1.7, .81, .62, 1.95],   // レーザーレイ: アタック・レンジを伸ばす + ディフェンスをさらに苦手に
   11: [1.19, 1, 1, .8],        // スプレッダー: レンジをさらに苦手に
-  12: [2.04, 2.04, .65, .5],   // フェニックス: ディフェンス・レンジをさらに苦手に
+  12: [2.04, 2.04, .44, .34],  // フェニックス: ディフェンス・レンジをさらに苦手に
   13: [2.2, .8, .8, 2.6],      // リヴァイアサン: アタック・レンジを伸ばす + スピード・ディフェンスをさらに苦手に
-  14: [1.65, .4, 2.3, 1.35],   // ケルベロス: 体を大きく(当たり判定も) + ディフェンスを少し下げる + アタック・レンジを伸ばす
+  14: [1.65, .4, 2.2, 1.35],   // ケルベロス: 体を大きく(当たり判定も) + ディフェンスを少し下げる + アタック・レンジを伸ばす
 };
 for (const i in BALANCE) MACHINES[i].mul = BALANCE[i];
 SHOTS.rapid.rate *= .47; SHOTS.rapid.dmg = 5.4;
 SHOTS.heavy.rate *= 1.35; SHOTS.heavy.spd *= .8; SHOTS.heavy.dmg = 18;
-SHOTS.sniper.dmg = 31; SHOTS.laser.dmg = 13; SHOTS.levia.dmg = 15; SHOTS.blade.r = 6;
-SHOTS.homing.turn = 12; SHOTS.homing.spd *= 1.25; SHOTS.homing.dmg = 14.5;
-SHOTS.cerb.spd *= .75; SHOTS.cerb.rate *= 1.4;
+SHOTS.sniper.dmg = 31; SHOTS.laser.dmg = 13; SHOTS.levia.dmg = 3; SHOTS.blade.r = 6;
+SHOTS.homing.turn = 12; SHOTS.homing.spd *= 1.25; SHOTS.homing.dmg = 17;
+SHOTS.cerb.spd *= .68; SHOTS.cerb.rate *= 1.7; // ケルベロス: 弾が遅く連射も遅い(短所)
 // ---- ステータス以外の個性(移動方法・弾) ----
 const TRAITS = {
   0: ['normal', 'クセのない操作'], 1: ['normal', 'クセのない操作・2連ショット'], 2: ['slide', '超すべる! 止まりにくいが最速'],
@@ -124,7 +124,7 @@ const isPart = k => k >= PK_PART && k < PK_PART + 9;
 const bits3 = m => (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1);
 const partsN = p => bits3(p.parts[0]) + bits3(p.parts[1]) + bits3(p.parts[2]);
 const PART_NAME = ['左翼', '右翼', '頭首'];
-const HP_SCALE = 2; // 内部の最大体力は 200(表示は%)
+const HP_SCALE = 3; // 内部の最大体力は 300(表示は%)
 
 // ---- 雑魚敵 ----
 const ENEMIES_BASE = [

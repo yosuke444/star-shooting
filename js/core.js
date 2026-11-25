@@ -132,6 +132,8 @@ const SFX = {
   charge: (s, v) => s.tone(200, 0.3, 'sine', 0.1 * v, 3),
   laser: (s, v) => { s.tone(1500, 0.8, 'sawtooth', 0.2 * v, 0.1); s.noise(0.8, 0.4 * v, 4000); },
   kill: (s, v) => { [523, 784, 1047, 1568].forEach((f, i) => { s.tone(f, 0.14, 'square', 0.18 * v, 1, i * 0.05); s.tone(f / 2, 0.14, 'sawtooth', 0.1 * v, 1, i * 0.05); }); s.noise(0.4, 0.4 * v, 4000); },
+  // レジェンドパーツ獲得の専用ファンファーレ
+  part: (s, v) => { [[659, 0], [784, .1], [988, .2], [1319, .32], [1175, .5], [1568, .62]].forEach(([f, d]) => { s.tone(f, .22, 'square', .14 * v, 1, d); s.tone(f / 2, .22, 'triangle', .16 * v, 1, d); }); s.tone(2093, .7, 'sine', .1 * v, 1, .8); s.noise(.6, .2 * v, 7000, .8); },
   move: (s, v) => s.tone(600, 0.04, 'square', 0.08 * v),
   ok: (s, v) => { s.tone(880, 0.06, 'square', 0.1 * v); s.tone(1320, 0.08, 'square', 0.1 * v, 1, 0.05); },
   back: (s, v) => s.tone(440, 0.08, 'square', 0.1 * v, 0.6),
