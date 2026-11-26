@@ -341,7 +341,8 @@ class Game {
     const got = [0, 0, 0, 0];
     for (let i = 0; i < gain; i++) { const w = M.mul.map(v => v * v * v); let r = Math.random() * w.reduce((a, b) => a + b); let k = 0; while ((r -= w[k]) > 0) k++; got[k] += this.addStat(p, k); }
     this.fx('mexp', p.x, p.y, p.m);
-    for (let k = 0; k < 4; k++) for (let j = 0; j < got[k]; j++) this.note(p, '', STAT_COL[k], 's' + k); // 乗り換えボーナスはアイコンでドンと出す
+    if (gain) this.note(p, '乗り換えボーナス!', '#ffe14d', 'b'); // 機体紹介の帯が消えてから出る(UI 側で待つ)
+    for (let k = 0; k < 4; k++) for (let j = 0; j < got[k]; j++) this.note(p, '', STAT_COL[k], 's' + k);
     if (gain) this.fx('rideBonus', p.x, p.y, gain, p.id);
     p.x = fm.x; p.y = fm.y; p.m = fm.m; p.hp = 100; p.ride = 0; p.inv = Math.max(p.inv, .6); p.vx = p.vy = 0;
     this.map.unstuck(p, 7);

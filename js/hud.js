@@ -46,7 +46,7 @@ const UI = {
   banners: [], feed: [], floats: [], prevEvt: null, prevPhase: null, sparks: [],
   reset() {
     this.popQ = []; this.pops = []; this.dmgs = []; this.killPop = null; this.combo = 0; this.banners = []; this.feed = []; this.floats = []; this.prevEvt = null; this.prevPhase = null; this.sparks = [];
-    this.prevBuf = null; this.lastRou = -1; this.resultDone = false; this.card = null; this.ko = null; this.legendShow = null; this.timeAnn = {}; this.pinchT = 0; this.prevSt = null; this.bump = [0, 0, 0, 0]; this.resStart = null; this.resStep = -1; this.flyers = [];
+    this.legendLater = null; this.prevBuf = null; this.lastRou = -1; this.resultDone = false; this.card = null; this.ko = null; this.legendShow = null; this.timeAnn = {}; this.pinchT = 0; this.prevSt = null; this.bump = [0, 0, 0, 0]; this.resStart = null; this.resStep = -1; this.flyers = [];
   },
   // 画面ど真ん中に出すカットイン
   banner(txt, sub, col, big = true, life = 3) {
@@ -113,6 +113,8 @@ const UI = {
   },
   // ---- 伝説マシン完成: カットイン + 全員の視点を移す + 機体ごとの専用演出 ----
   startLegend(V, pid, mid) {
+    // 自分が撃破演出中に完成した時は、撃破演出が終わってから見せる(他の人の画面ではすぐ)
+    if (pid === Render.meId && this.ko) { this.legendLater = [pid, mid]; return; }
     this.legendShow = { t: 0, pid, mid, life: 3.2 }; Render.forceId = pid; Render.forceT = 3.2;
     Sound.play('win', 1); Sound.play('bigboom', .8); FX.flash = .5; FX.flashCol = '#ffffff';
   },
@@ -138,15 +140,17 @@ const UI = {
   dmgNum(x, y, v, col, big) { this.dmgs.push({ x: x + rnd(-6, 6), y, v: Math.round(v), col, big, t: 0 }); if (this.dmgs.length > 40) this.dmgs.shift(); },
   popIcon(V, ic) {
     const c = ic[0], r = ic.slice(1);
-    if (c === 's') return GFX.patchBig[+r]; if (c === 'k') return GFX.key; if (c === 'p') return partImg(V, parseInt(r)); if (c === 'x') return GFX.skull;
+    if (c === 's') return GFX.patchBig[+r]; if (c === 'b') return GFX.crown; if (c === 'k') return GFX.key; if (c === 'p') return partImg(V, parseInt(r)); if (c === 'x') return GFX.skull;
     return GFX.itemUI[r] || GFX.itemUI.tv;
   },
   update(dt) {
     this.popT -= dt; this.comboT -= dt;
     // 撃破演出の間は取得表示を止めておき、終わってから一気に出す
-    if (this.popQ.length && this.popT <= 0 && !this.ko) {
+    // 撃破演出・機体紹介の帯が出ている間は取得表示を止めておき、終わってから出す
+    if (this.popQ.length && this.popT <= 0 && !this.ko && !this.card) {
       const p = this.popQ.shift(), kind = p.ic[0]; p.t = 0;
       if (kind === 'p') { p.life = 2; this.popT = 1.2; Sound.play('part', 1); }                       // パーツは長めに・専用の旋律
+      else if (kind === 'b') { p.life = 1.1; this.popT = .55; Sound.play('chest', 1); FX.addShake(5); for (let i = 0; i < 50; i++) { const a = Math.random() * TAU, s = rnd(150, 420); const mp = this.lastV && this.lastV.players[Render.meId], sx0 = mp ? Render.sx(mp.x) : W / 2, sy0 = mp ? Render.sy(mp.y) - 78 * Render.cam.zoom : H / 2; this.sparks.push({ x: sx0, y: sy0, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 100, t: 0, life: rnd(.5, 1.1), col: pick(STAT_COL.concat(['#ffe14d', '#ffffff'])), s: rnd(3, 7) }); } }
       else if (kind === 'i' || kind === 'k') { p.life = 1; this.popT = .45; Sound.play('item', 1); Sound.combo(this.combo); }
       else { this.combo = this.comboT > 0 ? this.combo + 1 : 0; this.comboT = .9; p.life = this.popQ.length > 3 ? .32 : this.popQ.length ? .45 : .75; this.popT = p.life * .55; Sound.combo(this.combo); } // たくさん取った時は1個あたり短く
       this.pops.push(p); if (this.pops.length > 4) this.pops.shift();
@@ -157,6 +161,7 @@ const UI = {
     for (let i = 0; i < 4; i++) this.bump[i] = Math.max(0, this.bump[i] - dt); this.bump.star = Math.max(0, (this.bump.star || 0) - dt);
     for (const d of this.dmgs) d.t += dt; this.dmgs = this.dmgs.filter(d => d.t < .8);
     for (const k of ['card', 'ko', 'legendShow']) if (this[k]) { this[k].t += dt; if (this[k].t > this[k].life) this[k] = null; }
+    if (this.legendLater && !this.ko) { const [pid, mid] = this.legendLater; this.legendLater = null; this.startLegend(this.lastV, pid, mid); }
     for (const b of this.banners) b.t += dt; this.banners = this.banners.filter(b => b.t < b.life);
     for (const f of this.feed) f.t += dt; this.feed = this.feed.filter(f => f.t < 6);
     for (const f of this.floats) f.t += dt; this.floats = this.floats.filter(f => f.t < 1.4);
@@ -166,6 +171,7 @@ const UI = {
 
   // ------------------------------------------------------------
   draw(ctx, V, time) {
+    this.lastV = V;
     const me = V.players[Render.meId];
     if (V.phase === 'roulette') { this.drawRoulette(ctx, V, time); this.drawBanners(ctx, time); return; }
     if (V.phase === 'result') { this.drawResult(ctx, V, time); return; }
@@ -245,6 +251,7 @@ const UI = {
       rays(ctx, cx, cy, 18, 64 * pop, 12, p.col, time * 2, .4 * out);
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.globalAlpha = (1 - k) * out; ctx.beginPath(); ctx.arc(cx, cy, 18 + k * 50, 0, TAU); ctx.stroke(); ctx.globalAlpha = out;
       const kind = p.ic[0], img = this.popIcon(V, p.ic), sc = (kind === 'p' ? 5 : kind === 'i' ? 4.6 : 4) * pop; ctx.drawImage(img, cx - img.width * sc / 2, cy - img.height * sc / 2, img.width * sc, img.height * sc);
+      if (kind === 'b') txt(ctx, p.s, cx, cy + 34, 22, '#ffe14d', 'center', 5);
       if (kind === 'i' || kind === 'k') txt(ctx, p.s.replace(/ ?ゲット!|!$/g, ''), cx, cy + 40, 16, p.col, 'center', 4);
       if (kind === 'p') { // パーツ: 完成形のシルエットに今の集まり具合を重ねる
         const idx = parseInt(p.ic.slice(1)), mask = +(p.ic.split(':')[1] || 0), k2 = Math.floor(idx / 3), li = V.legendOrder ? LEGEND_IDS.indexOf(V.legendOrder[k2]) : k2, up = GFX.legendUp[li], s2 = 3.2;
