@@ -53,7 +53,7 @@ class Game {
     return {
       id, name, cpu, col: id % PLAYER_COLS.length, x: 0, y: 0, vx: 0, vy: 0, a: 0, m: 0, hp: 100, st: [0, 0, 0, 0],
       ride: 0, cd: 0, items: [], buf: { jet: 0, dumb: 0, glass: 0, bar: 0 }, inv: 2, dead: 0, out: false, flash: 0,
-      parts: [0, 0, 0], key: false, deaths: 0, bk: 0, tv: false, arw: null, dmgAcc: 0, kills: 0, place: 0, dmgBoss: 0, notes: [], mask: 0, pmask: 0,
+      parts: [0, 0, 0], key: false, stars: 0, bk: 0, tv: false, arw: null, dmgAcc: 0, kills: 0, place: 0, dmgBoss: 0, notes: [], mask: 0, pmask: 0,
       xHold: -1, sa: 1, ss: 1, sd: 1, sr: 1, lastAtk: -1, mask2: 0, ai: null, slash: 0, z: false,
     };
   }
@@ -292,11 +292,10 @@ class Game {
       p.dead = RESPAWN_T; p.dmgAcc = 0;
       this.note(p, '撃破された… ' + RESPAWN_T + '秒後に復活', '#ff4d4d');
     } else {
-      // バトル: 無限復活。やられるとデス+1、倒すとデス-1
+      // バトル: 無限復活。倒すと★+1、やられると★-1(星が一番多い人の勝ち)
       this.scatter(p.x, p.y, drops, 90);
-      p.deaths++; p.dead = BATTLE_RESPAWN;
-      if (K && K !== p) { K.deaths--; K.bk++; this.note(K, 'デス -1', '#5fe36a'); }
-      this.note(p, 'デス +1  ' + BATTLE_RESPAWN + '秒後に復活', '#ff4d4d');
+      p.stars--; p.dead = BATTLE_RESPAWN;
+      if (K && K !== p) { K.stars++; K.bk++; this.note(K, '★ +1', '#ffe14d'); }
     }
   }
   damageEnemy(e, dmg, src) {
@@ -634,7 +633,7 @@ class Game {
     order.forEach((p, i) => {
       const a = i / n * TAU, d = R * (n > 24 && i % 2 ? .5 : .72);
       p.x = this.map.cx + Math.cos(a) * d; p.y = this.map.cy + Math.sin(a) * d; p.a = a + Math.PI; p.vx = p.vy = 0;
-      p.hp = 100; p.dead = 0; p.out = false; p.inv = 0; p.arw = null; p.key = false; p.place = 0; p.flash = 0; p.deaths = 0; p.bk = 0;
+      p.hp = 100; p.dead = 0; p.out = false; p.inv = 0; p.arw = null; p.key = false; p.place = 0; p.flash = 0; p.stars = 0; p.bk = 0;
       for (const k in p.buf) p.buf[k] = 0;
       this.map.unstuck(p, 7);
     });
@@ -649,12 +648,12 @@ class Game {
     this.itemT -= dt;
     if (this.itemT <= 0) { this.itemT = 5; if (this.chests.length < 3 + Math.floor(this.n() / 3)) this.spawnChest('I', this.map.freePos(10, Math.random, 40, { x: z.x, y: z.y, r: Math.max(20, z.r * .8) })); }
   }
-  // 順位: デス数が少ない順 → 同じならバトルでの撃破数が多い順
-  ranking() { return this.players.slice().sort((a, b) => (a.deaths - b.deaths) || (b.bk - a.bk) || (a.id - b.id)); }
+  // 順位: 星が多い順 → 同じならバトルでの撃破数が多い順
+  ranking() { return this.players.slice().sort((a, b) => (b.stars - a.stars) || (b.bk - a.bk) || (a.id - b.id)); }
   finish() {
     this.phase = 'result'; this.t = 0;
     const ranked = this.ranking(); ranked.forEach((p, i) => p.place = i + 1);
-    this.result = ranked.map(p => [p.id, p.place, p.bk, this.totalSt(p), p.m, p.deaths]);
+    this.result = ranked.map(p => [p.id, p.place, p.bk, this.totalSt(p), p.m, p.stars]);
     this.gfxEv('phase', 'result');
   }
 }

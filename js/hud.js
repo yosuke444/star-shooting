@@ -20,12 +20,11 @@ function wrapText(ctx, s, maxW, size) {
   for (const ch of s) { if (ctx.measureText(line + ch).width > maxW) { out.push(line); line = ch; } else line += ch; }
   if (line) out.push(line); return out;
 }
-// ドクロの上に数字(デス数)
+// 星の上に数字(バトルの星数)
+function starMark(ctx, x, y, n, s = 4, col = '#0b0b18') { iconC(ctx, GFX.star, x, y, s); txt(ctx, '' + n, x, y + s * .6, 9 * s * .85, col, 'center', s * .9, '#ffffff'); }
 function skull(ctx, x, y, n, s = 4, col = '#fff') { iconC(ctx, GFX.skull, x, y, s); txt(ctx, '' + n, x, y + GFX.skull.height * s * .55, 10 * s * .9, col, 'center', s * 1.6); }
 function rays(ctx, x, y, r0, r1, n, col, rot, alpha) { ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = col; for (let i = 0; i < n; i++) { const a = rot + i / n * TAU, da = Math.PI / n * .5; ctx.beginPath(); ctx.moveTo(x + Math.cos(a - da) * r0, y + Math.sin(a - da) * r0); ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1); ctx.lineTo(x + Math.cos(a + da) * r0, y + Math.sin(a + da) * r0); ctx.fill(); } ctx.restore(); }
 
-// バトルの順位: デスが少ない順 → 撃破が多い順
-function battleRank(V) { return V.players.slice().sort((a, b) => ((a.deaths || 0) - (b.deaths || 0)) || ((b.bk || 0) - (a.bk || 0)) || (a.id - b.id)); }
 const BUFF_LIST = [['dumb', 0], ['jet', 1], ['bar', 2], ['glass', 3]];
 const BUFF_MAX = { dumb: 9, jet: 9, bar: 6, glass: 9 };
 
@@ -83,6 +82,7 @@ const UI = {
       for (const k in NAME) { const on = me.buf[k] > 0, was = pb[k] > 0; if (on && !was) this.floats.push({ s: NAME[k] + '!', col: COL[k], t: 0, big: 1 }); if (!on && was) { this.floats.push({ s: NAME[k] + ' 終了', col: '#aaaaaa', t: 0 }); Sound.play('back', .7); } }
       this.prevBuf = Object.assign({}, me.buf);
     }
+    if (me && me.stars !== undefined) { if (this.prevStars !== undefined && me.stars > this.prevStars) { this.bump.star = .5; Sound.play('kill', 1); } this.prevStars = me.stars; }
     if (me && me.st) { if (this.prevSt) for (let i = 0; i < 4; i++) if (me.st[i] > this.prevSt[i]) this.bump[i] = .45; this.prevSt = me.st.slice(); }
   },
   onGfx(a, V) {
@@ -154,7 +154,7 @@ const UI = {
     }
     for (const p of this.pops) p.t += dt; this.pops = this.pops.filter(p => p.t < p.life);
     for (const f of this.flyers) f.t += dt; this.flyers = this.flyers.filter(f => f.t < .5);
-    for (let i = 0; i < 4; i++) this.bump[i] = Math.max(0, this.bump[i] - dt);
+    for (let i = 0; i < 4; i++) this.bump[i] = Math.max(0, this.bump[i] - dt); this.bump.star = Math.max(0, (this.bump.star || 0) - dt);
     for (const d of this.dmgs) d.t += dt; this.dmgs = this.dmgs.filter(d => d.t < .8);
     for (const k of ['card', 'ko', 'legendShow']) if (this[k]) { this[k].t += dt; if (this[k].t > this[k].life) this[k] = null; }
     for (const b of this.banners) b.t += dt; this.banners = this.banners.filter(b => b.t < b.life);
@@ -385,7 +385,6 @@ const UI = {
       ctx.font = `14px ${FONT}`; const tw = ctx.measureText(p.name).width + 14;
       ctx.fillStyle = 'rgba(8,8,24,.75)'; ctx.fillRect(x - tw / 2, ny - 10, tw, 20); ctx.fillStyle = col; ctx.fillRect(x - tw / 2, ny - 10, tw, 2); ctx.fillRect(x - tw / 2, ny + 8, tw, 2); ctx.fillRect(x - tw / 2, ny - 10, 2, 20); ctx.fillRect(x + tw / 2 - 2, ny - 10, 2, 20);
       txt(ctx, p.name, x, ny, 14, col, 'center', 0);
-      if (V.phase === 'battle') skull(ctx, x + tw / 2 + 12, ny - 4, p.deaths || 0, 1.4);
     }
     if (me && !me.out && me.dead <= 0 && V.phase === 'train') {
       let best = null, bd = 60 * 60;
@@ -480,19 +479,9 @@ const UI = {
       for (let i = 0; i < total; i++) { ctx.fillStyle = i < done ? '#ffe14d' : 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(54 + i * 14, 62, 4.5, 0, TAU); ctx.fill(); }
     } else if (V.phase === 'battle') {
       const me = V.players[Render.meId];
-      if (me) {
-        skull(ctx, 210, 30, me.deaths || 0, 4.2, (me.deaths || 0) > 0 ? '#ff9b9b' : '#9bffb0');
-        const rank = battleRank(V).indexOf(me) + 1; iconC(ctx, GFX.crown, 280, 18, 3); txt(ctx, rank + '', 280, 46, 30, rank === 1 ? '#ffe14d' : '#ffffff', 'center', 5);
-      }
-      this.drawBoard(ctx, V, time);
+      // 自分の星だけ表示(他人の星と途中順位は見えない)
+      if (me) { const b = this.bump.star || 0, s = 5 + b * 4; starMark(ctx, 222, 34, me.stars || 0, s, (me.stars || 0) < 0 ? '#c8283a' : '#0b0b18'); }
     }
-  },
-  // バトル中の順位(上位だけ小さく)
-  drawBoard(ctx, V, time) {
-    const R = battleRank(V), me = V.players[Render.meId], show = R.slice(0, 3);
-    if (me && !show.includes(me)) show.push(me);
-    show.forEach((p, i) => { const y = 84 + i * 20; ctx.globalAlpha = p === me ? 1 : .7; txt(ctx, (R.indexOf(p) + 1) + '', 16, y, 14, '#ffe14d', 'left', 3); txt(ctx, p.name, 36, y, 14, PLAYER_COLS[p.col], 'left', 3); skull(ctx, 160, y, p.deaths || 0, 1.5); });
-    ctx.globalAlpha = 1;
   },
   drawFeed(ctx) {
     let y = this.feedY + 8;
@@ -606,7 +595,7 @@ const UI = {
     if (!me) return;
     if (me.dead > 0 && (V.phase === 'train' || V.phase === 'battle')) {
       ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, H / 2 - 70, W, 140);
-      skull(ctx, W / 2 - 120, H / 2, V.phase === 'battle' ? '+1' : '', 7, '#ff4d4d');
+      if (V.phase === 'battle') starMark(ctx, W / 2 - 120, H / 2, '-1', 8, '#c8283a'); else skull(ctx, W / 2 - 120, H / 2, '', 7, '#ff4d4d');
       txt(ctx, Math.ceil(me.dead) + '', W / 2 + 40, H / 2, 80, '#ffffff', 'center', 8);
       ctx.globalAlpha = .7; txt(ctx, V.phase === 'battle' ? '秒後に復活' : '秒後にミニノーマルで復活', W / 2 + 40, H / 2 + 52, 16, '#fff', 'center', 3); ctx.globalAlpha = 1;
     }
@@ -659,7 +648,7 @@ const UI = {
       if (this.lastRou !== 'done') { this.lastRou = 'done'; Sound.play('chest', 1); FX.flash = .3; FX.flashCol = A.col; }
       ctx.strokeStyle = A.col; ctx.lineWidth = 4; ctx.strokeRect(W / 2 - 240 - f * 10, cy - 32 - f * 6, 480 + f * 20, 64 + f * 12);
       txt(ctx, A.desc, W / 2, cy + 70, 18, '#fff', 'center', 3);
-      txt(ctx, '何度でも復活! デスが一番少ない人の勝ち!', W / 2, cy + 108, 18, '#ffe14d', 'center', 4);
+      txt(ctx, '何度でも復活! 倒すと★+1 やられると★-1 星が一番多い人の勝ち!', W / 2, cy + 108, 18, '#ffe14d', 'center', 4);
     }
   },
 
@@ -702,7 +691,7 @@ const UI = {
       if (age < .3) { ctx.fillStyle = `rgba(255,255,255,${.6 * (1 - age / .3)})`; ctx.fillRect(x0 + sl, y - 15, 390, 30); }
       txt(ctx, r[1] + '位', x0 + 14 + sl, y, 20, '#fff', 'left', 4);
       txt(ctx, (p ? p.name : '?') + (mine ? ' (YOU)' : ''), x0 + 80 + sl, y, 20, p ? PLAYER_COLS[p.col] : '#fff', 'left', 4);
-      skull(ctx, x0 + 320 + sl, y - 2, r[5], 1.9); txt(ctx, '撃破' + r[2], x0 + 344 + sl, y, 12, '#ccc', 'left', 3);
+      starMark(ctx, x0 + 320 + sl, y - 2, r[5], 2.2); txt(ctx, '撃破' + r[2], x0 + 344 + sl, y, 12, '#ccc', 'left', 3);
     }
     ctx.globalAlpha = 1;
     if (!fin) {
@@ -735,7 +724,7 @@ const UI = {
     ctx.save(); ctx.rotate(-Math.PI / 2 + Math.sin(time * 3) * .12); const img = GFX.machine[W1[4]], s = 8; ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
     txt(ctx, 'WINNER', 0, 92, 28 + Math.sin(time * 6) * 2, PAL[RAINBOW[Math.floor(time * 10) % 8]], 'center', 6);
     { const nm = P1 ? P1.name : '', chars = [...nm]; ctx.font = `46px ${FONT}`; let tw = 0; const ws = chars.map(c => { const w2 = ctx.measureText(c).width; tw += w2; return w2; }); let cx = -tw / 2; chars.forEach((c, i) => { txt(ctx, c, cx + ws[i] / 2, 136 + Math.sin(time * 6 + i * .7) * 7, 46, P1 ? PLAYER_COLS[P1.col] : '#fff', 'center', 9, '#ffffff'); cx += ws[i]; }); }
-    skull(ctx, -40, 182, W1[5], 2.4); txt(ctx, '撃破 ' + W1[2], 20, 182, 18, '#fff', 'left', 4);
+    starMark(ctx, -40, 182, W1[5], 2.8); txt(ctx, '撃破 ' + W1[2], 20, 182, 18, '#fff', 'left', 4);
     ctx.restore();
     // 最下位
     if (n > 1) {
@@ -744,7 +733,7 @@ const UI = {
       ctx.fillStyle = '#5a5a7a'; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-40 + i * 40, -78, 26, 0, TAU); ctx.fill(); }
       ctx.fillStyle = '#8ad0ff'; for (let i = 0; i < 10; i++) { const rx = -80 + i * 18, ry = -50 + ((time * 120 + i * 37) % 70); ctx.fillRect(rx, ry, 2, 8); }
       const img2 = GFX.machine[L1[4]]; ctx.save(); ctx.translate(-110, 10); ctx.rotate(Math.PI / 2 + .3); ctx.globalAlpha = .8; ctx.drawImage(img2, -img2.width * 2.5, -img2.height * 2.5, img2.width * 5, img2.height * 5); ctx.restore();
-      txt(ctx, '最下位…', 30, -26, 22, '#8a8ab0', 'center', 4); txt(ctx, PL ? PL.name : '', 30, 10, 28, PL ? PLAYER_COLS[PL.col] : '#fff', 'center', 5); skull(ctx, 30, 48, L1[5], 1.8);
+      txt(ctx, '最下位…', 30, -26, 22, '#8a8ab0', 'center', 4); txt(ctx, PL ? PL.name : '', 30, 10, 28, PL ? PLAYER_COLS[PL.col] : '#fff', 'center', 5); starMark(ctx, 30, 48, L1[5], 2);
       ctx.restore();
     }
     // 紙吹雪・花火

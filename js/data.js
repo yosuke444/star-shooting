@@ -320,6 +320,7 @@ function buildGFX() {
       x.drawImage(pc, x0, y0, bw, bh, Math.floor((S - bw) / 2), Math.floor((S - bh) / 2), bw, bh); return c;
     });
   });
+  GFX.star = pixArt(['....y....', '...yyy...', '...yyy...', 'yyyyhyyyy', '.yyhhhyy.', '..yyyyy..', '..yy.yy..', '.yy...yy.', '.y.....y.'], { y: '#ffd23f', h: '#fff6c0' });
   GFX.skull = pixArt(['.wwwwwww.', 'wwwwwwwww', 'wkkwwwkkw', 'wkkwwwkkw', 'wwwwkwwww', '.wwwwwww.', '..wkwkw..'], { w: '#f4f4f8', k: '#0b0b18' });
   GFX.crown = pixArt(['y...y...y', 'yy.yyy.yy', 'yyyyyyyyy', 'yrryyybyy', 'yyyyyyyyy'], { y: '#ffd23f', r: '#ff4d6d', b: '#4dc3ff' });
   GFX.clock = pixArt(['..www..', '.wkwkw.', 'wkkwkkw', 'wkkwwww', 'wkkkkkw', '.wkkkw.', '..www..'], { w: '#ffffff', k: '#3a3a6a' });
