@@ -102,6 +102,7 @@ const Net = {
       me: g.meteors.map(m => [m.id, r1(m.x), r1(m.y), r1(m.t * 100), r1(m.fall * 100), m.r, m.big, m.kind]),
       wa: g.warps.map(w => [w.id, r1(w.x), r1(w.y), w.hue]),
       ev: c ? { ty: c.type, t: r1(c.t * 10), d: r1(c.dur), mk: c.marks, rg: c.region, sd: c.seed, st: r1(c.st) } : null,
+      wn: g.warns.map(w => [['mbomb', 'bbomb', 'sword'].indexOf(w.k), r1(w.x), r1(w.y), r1(w.a * 100), r1(w.t * 100)]),
       ei: g.evt.idx, en: g.evt.list.length, lo: g.legend.order,
       bnd: g.map.bnd ? [r1(g.map.bnd.x0), r1(g.map.bnd.y0), r1(g.map.bnd.x1), r1(g.map.bnd.y1)] : null,
       zo: g.zone ? [r1(g.zone.x), r1(g.zone.y), r1(g.zone.r)] : null,
@@ -163,7 +164,7 @@ class ClientView {
   constructor(d) {
     this.you = d.you; this.mapSeed = d.seed; this.map = genTrainingMap(d.seed, d.size); this.phase = 'train';
     this.players = d.names.map((name, id) => ({ id, name, col: id % PLAYER_COLS.length, x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, a: 0, m: 0, hp: 100, dead: 0, out: false, inv: 0, flash: 0, parts: [0, 0, 0], key: false, arw: null, buf: { jet: 0, dumb: 0, glass: 0, bar: 0 }, st: [0, 0, 0, 0], items: [], init: false }));
-    this.bullets = []; this.enemies = []; this.pickups = []; this.chests = []; this.machines = []; this.wilds = []; this.balls = []; this.meteors = []; this.warps = [];
+    this.warns = []; this.bullets = []; this.enemies = []; this.pickups = []; this.chests = []; this.machines = []; this.wilds = []; this.balls = []; this.meteors = []; this.warps = [];
     this.boss = null; this.fish = null; this.evt = { cur: null }; this.zone = null; this.t = 0; this.count = 0; this.arena = -1; this.rou = null; this.result = null;
     this.maps = { E: new Map(), K: new Map(), C: new Map(), M: new Map(), W: new Map() };
     this.lastQ = 0; this.mazeSeed = null; this.ss = 1; this.got = false;
@@ -219,6 +220,7 @@ class ClientView {
     const ms = this.evt.cur && this.evt.cur.type === 'maze' ? this.evt.cur.seed : null;
     if (ms !== this.mazeSeed && this.phase === 'train') { this.mazeSeed = ms; if (ms) { this.map.over = genLabyrinth(this.map, ms).over; this.map.overT = 0; } else this.map.over = null; this.map.buildMini(); }
     this.map.bnd = c.bnd ? { x0: c.bnd[0], y0: c.bnd[1], x1: c.bnd[2], y1: c.bnd[3] } : null;
+    this.warns = (c.wn || []).map(a => ({ k: ['mbomb', 'bbomb', 'sword'][a[0]], x: a[1], y: a[2], a: a[3] / 100, t: a[4] / 100 }));
     this.zone = c.zo ? { x: c.zo[0], y: c.zo[1], r: c.zo[2] } : null;
     for (const f of d.F) FX.play(f[0], f[1], f[2], f[3], f[4], f[5], this);
     for (const g of c.G) UI.onGfx(g, this);

@@ -89,6 +89,7 @@ const Render = {
     this.drawBullets(V, X0, Y0, X1, Y1, time);
     for (const m of V.meteors) this.drawMeteor(m, time);
     for (const p of V.players) if (p.arw && !p.out && p.dead <= 0) this.drawArrowWarn(p, time);
+    for (const wn of V.warns || []) this.drawItemWarn(wn, time);
     this.drawOverlayBounds(V, time);
     w.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.drawImage(this.wc, 0, 0, W, H);
@@ -356,6 +357,17 @@ const Render = {
     w.globalAlpha = .6; w.fillStyle = '#ff9b3d'; w.beginPath(); w.arc(x + 8, y - 12, img.width * .45, 0, TAU); w.fill(); w.globalAlpha = 1;
     if (Math.random() < (m.big ? 1 : .4)) Particles.add(x + rnd(-4, 4), y + rnd(-4, 4), 20, -40, .5, m.big ? 6 : 3, Math.random() < .5 ? C_ORA : C_SMOKE, 1);
     this.spr(img, x, y, time * 2);
+  },
+  // ダメージ系アイテムの予告: 範囲が赤く点滅し、内側から満ちていく(満ちたら発動)
+  drawItemWarn(wn, time) {
+    const w = this.w, k = clamp(1 - wn.t, 0, 1), fl = Math.floor(time * (6 + k * 18)) % 2, R = wn.k === 'bbomb' ? 130 : wn.k === 'mbomb' ? 62 : 78;
+    w.save(); w.translate(wn.x, wn.y);
+    const shape = (r) => { w.beginPath(); if (wn.k === 'sword') { w.moveTo(0, 0); w.arc(0, 0, r, wn.a - 1.25, wn.a + 1.25); w.closePath(); } else w.arc(0, 0, r, 0, TAU); };
+    w.globalAlpha = fl ? .32 : .18; w.fillStyle = '#ff2d2d'; shape(R); w.fill();
+    w.globalAlpha = .45; w.fillStyle = '#ff9b3d'; shape(R * k); w.fill();
+    w.globalAlpha = .95; w.strokeStyle = fl ? '#ffffff' : '#ff2d2d'; w.lineWidth = 2; w.setLineDash([6, 4]); w.lineDashOffset = -time * 30; shape(R); w.stroke(); w.setLineDash([]);
+    w.globalAlpha = 1; w.restore();
+    this.spr(GFX.itemUI[wn.k], wn.x, wn.y - 26 - Math.sin(time * 12) * 2, 0, false, 1.2);
   },
   drawArrowWarn(p, time) {
     const w = this.w, a = p.arw.a, lock = p.arw.t <= 0;

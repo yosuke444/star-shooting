@@ -23,6 +23,7 @@ class Game {
     const n = cfg.n; this.mapSize = Math.round(1300 + n * 55);
     this.mapSeed = cfg.seed; this.map = genTrainingMap(cfg.seed, this.mapSize);
     this.players = []; this.bullets = []; this.enemies = []; this.pickups = []; this.chests = []; this.machines = [];
+    this.pending = [];
     this.boss = null; this.fish = null; this.balls = []; this.meteors = []; this.warps = []; this.wilds = [];
     this.fxq = []; this.gfx = []; this.speedMul = 1; this.zone = null; this.arena = -1; this.rou = null; this.result = null;
     this.legend = { order: shuffle(LEGEND_IDS.slice()), spawned: [0, 0, 0], done: [false, false, false] };
@@ -166,6 +167,27 @@ class Game {
       this.gfxEv('legend', p.id, mid);
     }
   }
+  // ---------- ダメージ系アイテムの予告(1秒後に発動。予告は全員に見える) ----------
+  warnAttack(p, kind) { this.pending.push({ kind, own: p.id, t: 1 }); this.fx('warnItem', p.x, p.y, p.id); }
+  get warns() { const out = []; for (const w of this.pending) { const o = this.players[w.own]; if (o) out.push({ k: w.kind, x: o.x, y: o.y, a: o.aim ?? o.a, t: w.t }); } return out; }
+  updatePending(dt) {
+    if (!this.pending.length) return;
+    const frozen = this.phase === 'battle' && (this.count > 0 || this.over);
+    this.pending = this.pending.filter(w => {
+      const p = this.players[w.own]; if (!p || p.out || p.dead > 0) return false; // 本人がやられたら不発
+      if (frozen) return true; w.t -= dt; if (w.t > 0) return true;
+      if (w.kind === 'mbomb') this.explode(p.x, p.y, 62, 26 * p.sa, p.id, 0);
+      else if (w.kind === 'bbomb') this.explode(p.x, p.y, 130, 66 * p.sa, p.id, 1);
+      else {
+        const aim = p.aim ?? p.a, dmg = 62 * p.sa; p.slash = .25; this.fx('slash', p.x, p.y, Math.round(aim * 100));
+        this.forTargets(p.x, p.y, 78, (o, kind) => {
+          if (kind === 1 && o.id === p.id) return; const a = Math.atan2(o.y - p.y, o.x - p.x);
+          if (Math.abs(angDiff(aim, a)) < 1.25 || d2(o.x, o.y, p.x, p.y) < 18 * 18) this.hit(o, kind, dmg, p.id, p.x, p.y, 3);
+        });
+      }
+      return false;
+    });
+  }
   // ---------- アイテム使用 ----------
   activate(p, key) {
     const it = ITEMS[key];
@@ -174,19 +196,14 @@ class Game {
       case 'mdumb': case 'dumb': p.buf.dumb = Math.max(p.buf.dumb, it.dur); this.fx('buff', p.x, p.y, 0); break;
       case 'mglass': case 'glass': p.buf.glass = Math.max(p.buf.glass, it.dur); this.fx('buff', p.x, p.y, 3); break;
       case 'mbar': case 'bar': p.buf.bar = Math.max(p.buf.bar, it.dur); this.fx('buff', p.x, p.y, 2); break;
-      case 'mbomb': this.explode(p.x, p.y, 62, 26 * p.sa, p.id, 0); break;
-      case 'bbomb': this.explode(p.x, p.y, 130, 66 * p.sa, p.id, 1); break;
+      case 'mbomb': case 'bbomb': this.warnAttack(p, key); break; // 1秒予告してから爆発
     }
   }
   useItem(p) {
     const it = p.items[0]; if (!it) return;
     if (it.k === 'sword') {
-      it.n--; p.slash = .25; this.fx('slash', p.x, p.y, Math.round(p.a * 100));
-      const dmg = 62 * p.sa;
-      this.forTargets(p.x, p.y, 78, (o, kind) => {
-        if (kind === 1 && o.id === p.id) return; const a = Math.atan2(o.y - p.y, o.x - p.x);
-        if (Math.abs(angDiff(p.a, a)) < 1.25 || d2(o.x, o.y, p.x, p.y) < 18 * 18) this.hit(o, kind, dmg, p.id, p.x, p.y, 3);
-      });
+      if (this.pending.some(w => w.own === p.id && w.kind === 'sword')) return; // 予告中は次を振れない
+      it.n--; this.warnAttack(p, 'sword');
       if (it.n <= 0) p.items.shift();
       return;
     }
@@ -401,6 +418,7 @@ class Game {
     for (const c of this.chests) { c._k = 3; this.grid.add(c); }
     for (const w of this.wilds) { w._k = 6; this.grid.add(w); }
     for (const p of this.players) this.updatePlayer(p, dt);
+    this.updatePending(dt);
     this.updateBullets(dt);
     this.updateEnemies(dt);
     this.updatePickups(dt);
@@ -609,7 +627,7 @@ class Game {
     this.arena = idx; this.arenaSeed = this.rou.seed;
     this.map = genArena(idx, this.arenaSeed, n);
     this.phase = 'battle'; this.count = 3.5; this.battleT = 0; this.t = this.cfg.battleTime || 120; this.over = false; this.endT = 0;
-    this.enemies = []; this.pickups = []; this.chests = []; this.machines = []; this.bullets = [];
+    this.enemies = []; this.pickups = []; this.chests = []; this.machines = []; this.bullets = []; this.pending = [];
     this.boss = this.fish = null; this.balls = []; this.meteors = []; this.warps = []; this.wilds = []; this.speedMul = 1;
     const R = this.map.R; this.zone = { x: this.map.cx, y: this.map.cy, r: R + 20, r0: R + 20 };
     const order = shuffle(this.players.slice());

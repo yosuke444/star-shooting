@@ -166,6 +166,7 @@ const FX = {
         break;
       }
       case 'beam': { const an = a / 1000; FxObjs.add({ type: 'beam', x, y, a: an, life: .9 }); for (let i = 0; i < 120; i++) { const d = i * 14; Particles.add(x + Math.cos(an) * d, y + Math.sin(an) * d, rnd(-140, 140), rnd(-140, 140), rnd(.4, 1.1), 4, i % 3 ? C_YEL : C_WHITE, 2); } Sound.play('laser', 1); Sound.play('bigboom', .8); this.addShake(18); this.stop(.15); this.kick(.15); this.flash = .35; this.flashCol = '#fff8c0'; break; }
+      case 'warnItem': if (v) { Sound.play('warn', Math.max(v, a === me ? 1 : 0)); FxObjs.add({ type: 'ring', x, y, r0: 60, r1: 10, w: 3, col: '#ff2d2d', life: .3 }); } break;
       case 'arrowStart': Sound.play('charge', 1); Sound.play('warn', .8); break;
       case 'legend': for (let i = 0; i < 3; i++) FxObjs.add({ type: 'ring', x, y, r0: 6, r1: 120 + i * 40, w: 8, col: [MACHINES[a].col, '#ffffff', '#ffe14d'][i], life: .9 + i * .2 }); Particles.burst(x, y, 200, 320, 1.6, 4, RAINBOW, 1.4); Sound.play('win', 1); Sound.play('bigboom', .7); this.flash = .45; this.flashCol = '#ffffff'; this.stop(.2); this.kick(.2); this.addShake(12); break;
       case 'event': Sound.play('event', 1); Sound.play('bigboom', .5); this.addShake(14); this.kick(.12); break;
