@@ -30,6 +30,9 @@ const BUFF_MAX = { dumb: 9, jet: 9, bar: 6, glass: 9 };
 
 // 機体スプライトを破片に分ける(撃破演出用・キャッシュ)
 const FRAG_CACHE = {};
+// タイムアップの文字: TU_AT 秒から TU_GAP 秒おきに1文字ずつ
+const TU_CH = [...'TIME UP!'], TU_AT = .55, TU_GAP = .08;
+const back2 = k => k <= 0 ? 0 : k >= 1 ? 1 : 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2; // はみ出して戻る動き
 function shatter(m) {
   if (!FRAG_CACHE[m]) {
     const src = GFX.machine[m], w = src.width, h = src.height, cs = 4, out = [], d = src.getContext('2d').getImageData(0, 0, w, h).data;
@@ -46,7 +49,7 @@ const UI = {
   banners: [], feed: [], floats: [], prevEvt: null, prevPhase: null, sparks: [],
   reset() {
     this.popQ = []; this.pops = []; this.dmgs = []; this.killPop = null; this.combo = 0; this.banners = []; this.feed = []; this.floats = []; this.prevEvt = null; this.prevPhase = null; this.sparks = [];
-    this.legendLater = null; this.prevBuf = null; this.lastRou = -1; this.resultDone = false; this.card = null; this.ko = null; this.legendShow = null; this.timeAnn = {}; this.pinchT = 0; this.prevSt = null; this.bump = [0, 0, 0, 0]; this.resStart = null; this.resStep = -1; this.flyers = [];
+    this.legendLater = null; this.prevBuf = null; this.lastRou = -1; this.resultDone = false; this.card = null; this.ko = null; this.legendShow = null; this.timeAnn = {}; this.pinchT = 0; this.prevSt = null; this.bump = [0, 0, 0, 0]; this.resStart = null; this.resStep = -1; this.flyers = []; this.timeUp = null; this.stStart = null; this.resLand = 0;
   },
   // 画面ど真ん中に出すカットイン
   banner(txt, sub, col, big = true, life = 3) {
@@ -65,9 +68,10 @@ const UI = {
       this.prevEvt = key;
     }
     if (V.phase !== this.prevPhase) {
-      if (V.phase === 'roulette') { this.banner('トレーニング終了!', 'TIME UP', '#ff4d6d', true, 2); Sound.play('go', 1); }
+      if (V.phase === 'trainEnd') this.startTimeUp(true);
+      if (V.phase === 'status') { this.timeUp = null; this.stStart = null; this.stStep = 0; this.stCount = 0; Music.play('result'); }
       if (V.phase === 'battle') { this.banner(ARENAS[V.arena].name, 'BATTLE STAGE', ARENAS[V.arena].col, false, 2.2); Music.play('battle'); Render.cam.snap = true; this.timeAnn = {}; }
-      if (V.phase === 'result') { Music.stop(); this.resStart = null; this.resStep = -2; }
+      if (V.phase === 'result') { Music.stop(); this.resStart = null; this.resStep = -2; this.resLand = 0; this.drumNext = 0; this.timeUp = null; }
       this.prevPhase = V.phase;
     }
     // 残り時間の告知(2分・1分・30秒)
@@ -101,8 +105,13 @@ const UI = {
       case 'key': this.addFeed(this.name(V, a[1]) + ' が鍵をゲット', '#ffe14d', a[1] === me); break;
       case 'unlock': this.addFeed(this.name(V, a[1]) + ' が鍵付き宝箱をオープン!', '#ffe14d', a[1] === me); break;
       case 'arrow': if (a[1] !== me) { this.addFeed('!! ' + this.name(V, a[1]) + ' がビッグアローをチャージ中', '#ff4d4d', false); Sound.play('warn', .8); } break;
-      case 'timeup': this.banner('タイムアップ!', 'TIME UP', '#ff4d6d', true, 2.4); Sound.play('go', 1); break;
+      case 'timeup': this.startTimeUp(false); break;
     }
+  },
+  // ---- タイムアップ演出(トレーニング・バトル共通): ホイッスル → TIME UP! が1文字ずつ叩きつけられる → 大爆発 → 暗転 ----
+  startTimeUp(train) {
+    this.timeUp = { t: 0, life: train ? 4.4 : 4.6, train, col: train ? '#4dc3ff' : '#ff4d6d', n: 0, boom: false };
+    this.banners = []; Music.stop(); Sound.play('whistle', 1); FX.flash = .5; FX.flashCol = '#ffffff'; FX.addShake(14);
   },
   // ---- 撃破演出: ①ヒットストップ+画面振動 → ②背景が倒した側の色になり、二人と決め手の弾幕だけを大写し・機体が木っ端微塵 ----
   startKO(V, k, v, cause = 0, cx = 0, cy = 0) {
@@ -160,6 +169,16 @@ const UI = {
     for (const f of this.flyers) f.t += dt; this.flyers = this.flyers.filter(f => f.t < .5);
     for (let i = 0; i < 4; i++) this.bump[i] = Math.max(0, this.bump[i] - dt); this.bump.star = Math.max(0, (this.bump.star || 0) - dt);
     for (const d of this.dmgs) d.t += dt; this.dmgs = this.dmgs.filter(d => d.t < .8);
+    if (this.timeUp) {
+      const U = this.timeUp; U.t += dt;
+      const n = TU_CH.filter((c, i) => c !== ' ' && U.t >= TU_AT + i * TU_GAP).length;
+      if (n > U.n) { U.n = n; Sound.play('stamp', 1); FX.addShake(9); }
+      if (!U.boom && U.t >= TU_AT + TU_CH.length * TU_GAP + .05) {
+        U.boom = true; Sound.play('bigboom', 1); Sound.play('go', 1); FX.flash = .7; FX.flashCol = '#ffffff'; FX.addShake(28);
+        for (let i = 0; i < 220; i++) { const a = Math.random() * TAU, s = rnd(150, 900); this.sparks.push({ x: W / 2 + rnd(-260, 260), y: H / 2 + rnd(-30, 30), vx: Math.cos(a) * s, vy: Math.sin(a) * s - 150, t: 0, life: rnd(.8, 1.9), col: pick(['#ffffff', '#ffe14d', U.col, U.col, '#ff7ad9']), s: rnd(3, 9) }); }
+      }
+      if (U.t > U.life) this.timeUp = null;
+    }
     for (const k of ['card', 'ko', 'legendShow']) if (this[k]) { this[k].t += dt; if (this[k].t > this[k].life) this[k] = null; }
     if (this.legendLater && !this.ko) { const [pid, mid] = this.legendLater; this.legendLater = null; this.startLegend(this.lastV, pid, mid); }
     for (const b of this.banners) b.t += dt; this.banners = this.banners.filter(b => b.t < b.life);
@@ -175,7 +194,8 @@ const UI = {
     const me = V.players[Render.meId];
     if (V.phase === 'roulette') { this.drawRoulette(ctx, V, time); this.drawBanners(ctx, time); return; }
     if (V.phase === 'result') { this.drawResult(ctx, V, time); return; }
-    if (this.ko) { this.drawKO(ctx, V, time); this.drawBanners(ctx, time); return; }
+    if (V.phase === 'status') { this.drawStatus(ctx, V, time); return; }
+    if (this.ko) { this.drawKO(ctx, V, time); this.drawTimeUp(ctx, time); this.drawBanners(ctx, time); return; }
     this.drawSpeedLines(ctx, V, time);
     this.drawBuffEdges(ctx, me, time);
     this.drawMinimap(ctx, V, time);
@@ -197,6 +217,7 @@ const UI = {
     this.drawCenter(ctx, V, me, time);
     this.drawPops(ctx, V, time);
     this.drawCard(ctx, time);
+    this.drawTimeUp(ctx, time);
     this.drawBanners(ctx, time);
     this.drawLegendShow(ctx, V, time); // 伝説完成の演出は一番手前
     this.arrowTension(V, time);
@@ -632,6 +653,143 @@ const UI = {
       ctx.restore();
     }
   },
+  // ---- タイムアップ演出 ----
+  drawTimeUp(ctx, time) {
+    const U = this.timeUp; if (!U) return;
+    const t = U.t, L = U.life, inK = Math.min(1, t / .3), cy = H / 2 - 20;
+    ctx.save();
+    ctx.fillStyle = `rgba(8,4,24,${.5 * inK})`; ctx.fillRect(0, 0, W, H);
+    rays(ctx, W / 2, cy, 50, 900, 26, U.col, time * .5, .16 * inK);
+    // 中央の帯
+    const bh = 170 * Math.min(1, t / .25); ctx.fillStyle = 'rgba(10,10,30,.8)'; ctx.fillRect(0, cy - bh / 2, W, bh);
+    ctx.fillStyle = U.col; ctx.fillRect(0, cy - bh / 2, W, 6); ctx.fillRect(0, cy + bh / 2 - 6, W, 6);
+    // 上下から警告テープが滑り込む
+    for (const [y0, dir] of [[46, 1], [H - 46, -1]]) {
+      const k = clamp((t - .1) / .3, 0, 1); if (k <= 0) continue;
+      ctx.save(); ctx.translate(W / 2, y0 - dir * (1 - k) ** 2 * 140); ctx.rotate(-dir * .05);
+      ctx.fillStyle = '#ffe14d'; ctx.fillRect(-W, -21, W * 2, 42); ctx.fillStyle = '#0b0b18'; ctx.fillRect(-W, -21, W * 2, 4); ctx.fillRect(-W, 17, W * 2, 4);
+      const seg = 180, off = ((time * 150 * dir) % seg + seg) % seg;
+      for (let i = -5; i < 6; i++) txt(ctx, 'TIME UP ★', i * seg + off - 90, 1, 22, '#0b0b18', 'center', 0);
+      ctx.restore();
+    }
+    // TIME UP! を1文字ずつ叩きつける
+    const S = 112; ctx.font = `${S}px ${FONT}`;
+    const ws = TU_CH.map(c => c === ' ' ? S * .35 : ctx.measureText(c).width), tw = ws.reduce((a, b) => a + b, 0);
+    let x = W / 2 - tw / 2;
+    TU_CH.forEach((c, i) => {
+      const w = ws[i], cx = x + w / 2; x += w; if (c === ' ') return;
+      const lt = t - (TU_AT + i * TU_GAP); if (lt < -.12) return;
+      const k = clamp((lt + .12) / .12, 0, 1), sc = lt < 0 ? 3 - k * 2 : 1 + Math.max(0, .12 - lt) * 2, bob = lt > 0 ? Math.sin(time * 8 + i * .8) * 4 : 0;
+      ctx.save(); ctx.globalAlpha = lt < 0 ? k : 1; ctx.translate(cx, cy + 6 + bob); ctx.scale(sc, sc); if (lt < .2) ctx.rotate((i % 2 ? .12 : -.12) * (1 - Math.max(0, lt) / .2));
+      txt(ctx, c, 5, 9, S, '#0b0b18', 'center', 0);
+      txt(ctx, c, 0, 0, S, '#ffffff', 'center', 14, U.col);
+      ctx.restore();
+      if (lt >= 0 && lt < .3) { ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 1 - lt / .3; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 30 + lt * 260, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; }
+    });
+    // 全部そろったら衝撃波
+    const tb = t - (TU_AT + TU_CH.length * TU_GAP + .05);
+    if (tb > 0) for (let j = 0; j < 3; j++) { const r = (tb - j * .12) * 1000; if (r <= 0 || r > 1100) continue; ctx.globalAlpha = Math.max(0, 1 - r / 1100) * .8; ctx.strokeStyle = j % 2 ? U.col : '#ffffff'; ctx.lineWidth = 10 - j * 3; ctx.beginPath(); ctx.ellipse(W / 2, cy, r, r * .55, 0, 0, TAU); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    // 見出し
+    if (tb > .1) {
+      const k = clamp((tb - .1) / .25, 0, 1);
+      ctx.globalAlpha = k; txt(ctx, U.train ? 'トレーニング終了!' : 'バトル終了!', W / 2 + (1 - k) ** 2 * 500, cy + 118, 34, U.col, 'center', 7, '#0b0b18');
+      if (tb > .9) { ctx.globalAlpha = clamp((tb - .9) / .3, 0, 1) * (.75 + Math.sin(time * 6) * .25); txt(ctx, U.train ? 'まずはステータスを確認しよう' : 'いよいよ結果発表…!', W / 2, cy + 160, 18, '#ffffff', 'center', 4); }
+      ctx.globalAlpha = 1;
+    }
+    // 最後は暗転して次の画面へ
+    const fo = clamp((t - (L - .7)) / .7, 0, 1); if (fo > 0) { ctx.fillStyle = `rgba(0,0,0,${fo})`; ctx.fillRect(0, 0, W, H); }
+    ctx.restore();
+  },
+  // ============================================================
+  //  ステータス確認タイム(バトル前・時間が来たら自動でステージ抽選へ)
+  // ============================================================
+  drawStatus(ctx, V, time) {
+    if (this.stStart === null || this.stStart === undefined) this.stStart = time;
+    const T = time - this.stStart, me = V.players[Render.meId], N = V.players.length;
+    const stOf = q => q.st || [0, 0, 0, 0], sum = q => stOf(q).reduce((a, b) => a + b, 0);
+    const back = k => k <= 0 ? 0 : k >= 1 ? 1 : 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2; // はみ出して戻る
+    let step = 0; // 演出の段階(音を鳴らす用)
+    ctx.save();
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, 'rgba(14,10,46,.95)'); bg.addColorStop(1, 'rgba(4,4,16,.97)'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 60; i++) { const sx = (i * 97 + time * (30 + i % 5 * 25)) % W, sy = (i * 53 + i * i) % H; ctx.fillStyle = i % 3 ? '#ffffff50' : '#ffe14d70'; ctx.fillRect(sx, sy, 2, 2); }
+    const tk = back(clamp(T / .4, 0, 1));
+    ctx.save(); ctx.translate(W / 2, 40); ctx.scale(tk, tk); txt(ctx, 'STATUS CHECK', 0, 0, 40, '#ffe14d', 'center', 7); ctx.restore();
+    ctx.globalAlpha = clamp((T - .3) / .3, 0, 1); txt(ctx, 'トレーニングの成果をチェック! 次はいよいよバトル', W / 2, 74, 14, '#e8e8ff', 'center', 3); ctx.globalAlpha = 1;
+    if (me) {
+      const M = MACHINES[me.m], st = stOf(me), mc = M.legend ? '#ffe14d' : M.col, rankOf = f => 1 + V.players.filter(q => f(q) > f(me)).length;
+      // 左: 自分のマシン
+      panel(ctx, 24, 96, 452, 386, 'rgba(20,20,60,.55)', mc);
+      const mx = 150, my = 210, ps = back(clamp((T - .2) / .4, 0, 1));
+      rays(ctx, mx, my, 30, 170, 14, mc, time * .4, .22 * ps);
+      ctx.save(); ctx.translate(mx, my + Math.sin(time * 2) * 4); ctx.scale(ps, ps); ctx.rotate(-Math.PI / 2 + Math.sin(time * 1.3) * .15);
+      const img = GFX.machine[me.m], s = Math.min(7, 150 / img.width); ctx.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); ctx.restore();
+      ctx.globalAlpha = clamp((T - .4) / .3, 0, 1);
+      txt(ctx, M.name, mx, 322, 26, mc, 'center', 5);
+      wrapText(ctx, M.desc, 220, 12).forEach((l, i) => txt(ctx, l, mx, 348 + i * 16, 12, '#ccccee', 'center', 3));
+      ctx.globalAlpha = 1;
+      // ステータス: 数字がカウントアップ → 全体での順位
+      for (let i = 0; i < 4; i++) {
+        const y = 134 + i * 54, k = clamp((T - .6 - i * .25) / .6, 0, 1), mx2 = Math.max(1, ...V.players.map(q => stOf(q)[i]));
+        if (k >= 1) step++;
+        ctx.globalAlpha = clamp((T - .5 - i * .25) / .2, 0, 1); if (ctx.globalAlpha <= 0) continue;
+        iconC(ctx, GFX.patchBig[i], 290, y, 2.6 * (k >= 1 ? 1 : 1.15));
+        txt(ctx, '' + Math.round(st[i] * k), 318, y + 1, 30, k < 1 ? STAT_COL[i] : '#ffffff', 'left', 5);
+        const mul = M.mul[i]; if (mul > 1.001 || mul < .999) txt(ctx, mul > 1 ? '▲' : '▼', 290, y - 24, 10, mul > 1 ? '#5fe36a' : '#ff6b6b', 'center', 3);
+        ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(318, y + 20, 140, 6); ctx.fillStyle = STAT_COL[i]; ctx.fillRect(318, y + 20, 140 * (st[i] / mx2) * k, 6);
+        if (k >= 1) txt(ctx, '全体' + rankOf(q => stOf(q)[i]) + '位', 460, y + 1, 13, '#e8e8ff', 'right', 3);
+      }
+      ctx.globalAlpha = 1;
+      // 総合力
+      const tk2 = clamp((T - 1.8) / .6, 0, 1);
+      if (tk2 > 0) {
+        if (tk2 >= 1) step++;
+        txt(ctx, '総合力', 282, 366, 14, '#ffe14d', 'left', 3);
+        const sc = tk2 >= 1 ? 1 + Math.max(0, .15 - (T - 2.4)) * 3 : 1;
+        ctx.save(); ctx.translate(340, 366); ctx.scale(sc, sc); txt(ctx, '' + Math.round(sum(me) * tk2), 0, 0, 36, '#ffe14d', 'left', 6); ctx.restore();
+        if (tk2 >= 1) txt(ctx, '全体 ' + rankOf(sum) + '位 / ' + N + '人', 460, 400, 15, '#ffffff', 'right', 3);
+      }
+      // 持ち物
+      ctx.globalAlpha = clamp((T - 2.2) / .3, 0, 1);
+      const items = me.items || []; txt(ctx, 'アイテム', 44, 448, 13, '#aaaacc', 'left', 3);
+      items.forEach((it, i) => { const im = GFX.itemUI[it.k]; if (!im) return; const sc = 34 / im.width; ctx.drawImage(im, 108 + i * 42, 448 - im.height * sc / 2, im.width * sc, im.height * sc); });
+      if (!items.length) txt(ctx, 'なし', 108, 448, 13, '#666688', 'left', 3);
+      let px = 220;
+      for (let k = 0; k < 3; k++) {
+        if (!me.parts || !me.parts[k] || !V.legendOrder) continue; const li = LEGEND_IDS.indexOf(V.legendOrder[k]), up = GFX.legendUp[li], s2 = 2.2;
+        ctx.save(); ctx.globalAlpha *= .3; ctx.drawImage(up, px, 448 - up.height * s2 / 2, up.width * s2, up.height * s2); ctx.restore();
+        for (let i = 0; i < 3; i++) if (me.parts[k] & (1 << i)) ctx.drawImage(GFX.legendPieces[li][i], px, 448 - up.height * s2 / 2, up.width * s2, up.height * s2);
+        px += up.width * s2 + 8;
+      }
+      ctx.globalAlpha = 1;
+    }
+    // 右: パワーランキング(総合力の高い順)
+    panel(ctx, 492, 96, 444, 386, 'rgba(20,20,60,.45)', 'rgba(138,138,208,.4)');
+    txt(ctx, 'パワーランキング', 714, 116, 18, '#ffe14d', 'center', 4); txt(ctx, '総合力の高い順', 714, 136, 11, '#aaaacc', 'center', 2);
+    const R = V.players.slice().sort((a, b) => sum(b) - sum(a) || a.id - b.id), myI = me ? R.indexOf(me) : -1;
+    const rows = myI >= 10 ? R.slice(0, 9).concat([me]) : R.slice(0, 10);
+    rows.forEach((q, j) => {
+      const k = clamp((T - 1.0 - (rows.length - 1 - j) * .14) / .25, 0, 1); if (k <= 0) return; if (k >= 1) step++; // 下の順位から積み上がる
+      const y = 162 + j * 31, sl = (1 - k) ** 2 * 300, mine = q === me, r = 1 + R.filter(o => sum(o) > sum(q)).length; // 同点は同じ順位
+      ctx.globalAlpha = k;
+      ctx.fillStyle = mine ? 'rgba(255,225,77,.28)' : 'rgba(255,255,255,.07)'; ctx.fillRect(504 + sl, y - 13, 420, 26);
+      ctx.fillStyle = PLAYER_COLS[q.col]; ctx.fillRect(504 + sl, y - 13, 4, 26);
+      if (mine && myI >= 10) { ctx.fillStyle = '#ffffff40'; ctx.fillRect(504 + sl, y - 17, 420, 1); }
+      txt(ctx, r + '位', 518 + sl, y, 16, r <= 3 ? '#ffe14d' : '#ffffff', 'left', 3);
+      const im = GFX.machine[q.m], s = Math.min(2, 24 / im.width); ctx.save(); ctx.translate(590 + sl, y); ctx.rotate(-Math.PI / 2); ctx.drawImage(im, -im.width * s / 2, -im.height * s / 2, im.width * s, im.height * s); ctx.restore();
+      txt(ctx, q.name + (mine ? ' (YOU)' : ''), 612 + sl, y, 15, PLAYER_COLS[q.col], 'left', 3);
+      txt(ctx, '' + sum(q), 914 + sl, y, 16, '#ffffff', 'right', 3);
+    });
+    ctx.globalAlpha = 1;
+    // 下: 残り時間(自動で次へ)
+    const rem = Math.max(0, V.t), f = clamp(rem / STATUS_TIME, 0, 1);
+    txt(ctx, 'バトルステージ抽選まで あと ' + Math.ceil(rem) + '秒', W / 2, 500, 15, '#ffffff', 'center', 3);
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(W / 2 - 300, 516, 600, 8); ctx.fillStyle = rem < 3 ? '#ff4d6d' : '#ffe14d'; ctx.fillRect(W / 2 - 300, 516, 600 * f, 8);
+    if (rem < 3.5 && Math.ceil(rem) !== this.stCount) { this.stCount = Math.ceil(rem); Sound.play('count', 1); }
+    if (step > (this.stStep || 0)) { this.stStep = step; Sound.play('pick', 1); }
+    if (T < .5) { ctx.fillStyle = `rgba(0,0,0,${1 - T / .5})`; ctx.fillRect(0, 0, W, H); } // 暗転明け
+    ctx.restore();
+  },
   drawRoulette(ctx, V, time) {
     const R = V.rou; if (!R) return;
     ctx.fillStyle = 'rgba(6,6,20,.86)'; ctx.fillRect(0, 0, W, H);
@@ -667,19 +825,21 @@ const UI = {
     const R = V.result; if (!R) return;
     if (this.resStart === null) this.resStart = time;
     const T = time - this.resStart, n = R.length;
-    const intro = 1.6, step = clamp(7 / Math.max(1, n - 2), .22, .8), mids = Math.max(0, n - 2), finalT = intro + mids * step + 1.8;
+    const intro = 3.6, step = clamp(12 / Math.max(1, n - 2), .25, 1.3), mids = Math.max(0, n - 2), drumT = 3.8, finalT = intro + mids * step + drumT;
     // 演出の段階が進んだら音を鳴らす
     const stepNow = T < intro ? -1 : T < intro + mids * step ? Math.floor((T - intro) / step) : T < finalT ? mids : mids + 1;
     const burst = (x, y, cols, n, sp) => { for (let i = 0; i < n; i++) { const a = Math.random() * TAU, s = rnd(sp * .3, sp); this.sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 100, t: 0, life: rnd(.7, 1.6), col: pick(cols), s: rnd(4, 9) }); } };
     if (stepNow !== this.resStep) {
       if (stepNow === -1) { Sound.play('event', 1); FX.addShake(10); burst(280, H / 2, ['#ffe14d', '#ffffff', '#ff7ad9'], 80, 600); }
       if (stepNow >= 0 && stepNow < mids) { const p = V.players[R[n - 2 - stepNow][0]]; Sound.combo(Math.min(20, stepNow)); Sound.play('boom', .5); FX.addShake(6); burst(280, H / 2, [p ? PLAYER_COLS[p.col] : '#fff', '#ffffff', '#ffe14d'], 50, 450); }
-      if (stepNow === mids && mids >= 0) { for (let i = 0; i < 20; i++) setTimeout(() => Sound.play('hit', 1), i * 85); }
       if (stepNow === mids + 1) { Sound.play('win', 1); Sound.play('bigboom', 1); FX.flash = .8; FX.flashCol = '#ffffff'; FX.addShake(26); Music.play('result'); burst(280, 250, RAINBOW.map(c => PAL[c]).concat(['#ffffff', '#ffe14d']), 260, 900); burst(750, 110, ['#5a5a7a', '#8ad0ff', '#ffffff'], 60, 300); }
       this.resStep = stepNow;
     }
     // 画面振動・フラッシュ・火花(リザルトでも効かせる)
     ctx.save(); if (FX.shake > 0) ctx.translate((Math.random() - .5) * FX.shake, (Math.random() - .5) * FX.shake);
+    // ドラムロール(発表前と、1位・最下位の前。だんだん速く)
+    const dIntro = T > 1.6 && T < intro - .1, dFinal = stepNow === mids && T < finalT - .12;
+    if ((dIntro || dFinal) && time >= (this.drumNext || 0)) { const pr = dIntro ? (T - 1.6) / (intro - 1.7) : (T - (intro + mids * step)) / (drumT - .12); Sound.play('drum', .6 + pr * .5); this.drumNext = time + lerp(.12, .03, clamp(pr, 0, 1)); }
     // 背景: 回る光線 + 左右から振れるスポットライト
     const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1a0a3a'); bg.addColorStop(1, '#07071a'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     rays(ctx, 280, H / 2, 0, 1100, 22, '#5a3aaa', time * .25, .35);
@@ -715,7 +875,20 @@ const UI = {
         // ドラムロール中
         const big = stepNow >= mids, s = 1 + Math.sin(time * (big ? 16 : 6)) * (big ? .08 : .04) + (big ? (T - (intro + mids * step)) * .15 : 0);
         if (big) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H); for (let i = 0; i < 6; i++) { const a = time * 7 + i * TAU / 6; ctx.fillStyle = PAL[RAINBOW[i]]; ctx.beginPath(); ctx.arc(280 + Math.cos(a) * 190, H / 2 + Math.sin(a) * 80, 8, 0, TAU); ctx.fill(); } }
-        ctx.save(); ctx.translate(280, H / 2); ctx.scale(s, s); txt(ctx, T < intro ? '結果発表!' : '1位と最下位は…!?', 0, 0, T < intro ? 72 : 44, '#ffe14d', 'center', 10); ctx.restore();
+        if (T < intro) {
+          // 「結果発表!」が1文字ずつ叩きつけられる
+          const CH = [...'結果発表!'], S2 = 76; ctx.font = `${S2}px ${FONT}`; const ws = CH.map(c => ctx.measureText(c).width); let x = 280 - ws.reduce((a, b) => a + b, 0) / 2;
+          CH.forEach((c, i) => { const w = ws[i], cx = x + w / 2; x += w; const lt = T - (.35 + i * .22); if (lt < -.1) return; const k = clamp((lt + .1) / .1, 0, 1), sc = lt < 0 ? 3 - 2 * k : 1 + Math.max(0, .1 - lt) * 3 + (T > 1.6 ? Math.sin(time * 14 + i) * .04 : 0); ctx.save(); ctx.globalAlpha = lt < 0 ? k : 1; ctx.translate(cx, H / 2 + Math.sin(time * 5 + i) * 3); ctx.scale(sc, sc); txt(ctx, c, 0, 0, S2, '#ffe14d', 'center', 10); ctx.restore(); if (lt >= 0 && lt < .3) { ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 1 - lt / .3; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, H / 2, 30 + lt * 240, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; } });
+          const nl = CH.filter((c, i) => T >= .35 + i * .22).length; if (nl > (this.resLand || 0)) { this.resLand = nl; Sound.play('stamp', 1); FX.addShake(10); burst(280, H / 2, ['#ffe14d', '#ffffff', '#ff7ad9'], 30, 380); }
+          if (T > 1.6) { ctx.globalAlpha = .6 + Math.sin(time * 8) * .3; txt(ctx, 'ドゥルルルル…', 280, H / 2 + 74, 18, '#ffffff', 'center', 4); ctx.globalAlpha = 1; }
+        } else {
+          // 1位と最下位の前: 暗くなっていき、スポットライトが暴れる
+          const dk = clamp((T - (intro + mids * step)) / drumT, 0, 1);
+          ctx.fillStyle = `rgba(0,0,0,${.35 * dk})`; ctx.fillRect(0, 0, W, H);
+          for (let i = 0; i < 3; i++) { const lx = 280 + Math.sin(time * (2.3 + i * .9) + i * 2) * 240, ly = H / 2 + Math.cos(time * (1.7 + i * .7) + i) * 160; const g2 = ctx.createRadialGradient(lx, ly, 10, lx, ly, 90); g2.addColorStop(0, 'rgba(255,243,176,.35)'); g2.addColorStop(1, 'rgba(255,243,176,0)'); ctx.fillStyle = g2; ctx.fillRect(lx - 90, ly - 90, 180, 180); }
+          ctx.save(); ctx.translate(280, H / 2); ctx.scale(s, s); txt(ctx, '1位と最下位は…!?', 0, 0, 44, '#ffe14d', 'center', 10); ctx.restore();
+          ctx.globalAlpha = .6 + Math.sin(time * 10) * .3; txt(ctx, 'ドゥルルルルルル…', 280 + (Math.random() - .5) * 4 * dk, H / 2 + 56, 18, '#ffffff', 'center', 4); ctx.globalAlpha = 1;
+        }
       }
       this.resultFx(ctx); ctx.restore();
       return;
@@ -723,6 +896,9 @@ const UI = {
     // ---- フィナーレ: 1位(大きく)と最下位(しょんぼり)を同時に ----
     const fk = T - finalT, pop = fk < .3 ? .3 + fk / .3 * .9 : fk < .45 ? 1.2 - (fk - .3) * 1.3 : 1;
     const W1 = R[0], P1 = V.players[W1[0]], L1 = R[n - 1], PL = V.players[L1[0]];
+    // 1位: 天井から光の柱 + 衝撃波
+    { const pa = Math.min(1, fk / .3) * (.5 + Math.sin(time * 3) * .1), gp = ctx.createLinearGradient(180, 0, 380, 0); gp.addColorStop(0, 'rgba(255,243,176,0)'); gp.addColorStop(.5, `rgba(255,243,176,${pa * .45})`); gp.addColorStop(1, 'rgba(255,243,176,0)'); ctx.fillStyle = gp; ctx.beginPath(); ctx.moveTo(230, 0); ctx.lineTo(330, 0); ctx.lineTo(400, H); ctx.lineTo(160, H); ctx.fill(); }
+    for (let j = 0; j < 4; j++) { const r = (fk - j * .15) * 700; if (r <= 0 || r > 900) continue; ctx.globalAlpha = (1 - r / 900) * .8; ctx.strokeStyle = j % 2 ? '#ffe14d' : '#ffffff'; ctx.lineWidth = 8 - j; ctx.beginPath(); ctx.arc(280, 250, r, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1;
     // 1位
     ctx.save(); ctx.translate(280, 250); ctx.scale(pop, pop);
     rays(ctx, 0, 0, 40, 330, 18, '#ffe14d', time, .45);
@@ -752,7 +928,10 @@ const UI = {
     if (n > 1 && Math.floor(time * 2.3) % 5 === 0 && (time * 2.3) % 1 < .12) { ctx.fillStyle = 'rgba(200,220,255,.35)'; ctx.fillRect(580, 40, 340, 160); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(760, 30); ctx.lineTo(740, 80); ctx.lineTo(765, 80); ctx.lineTo(735, 150); ctx.stroke(); }
     this.resultFx(ctx); ctx.restore();
     const blink = Math.floor(time * 2) % 2;
-    this.resultDone = fk > 1.5;
-    if (blink && fk > 1.5) txt(ctx, Net.role === 'client' ? 'ホストの操作を待っています…' : 'Z: タイトルへ戻る', W / 2, H - 16, 16, '#fff', 'center', 3);
+    // 自分の順位(1位・最下位以外のとき)
+    const myR = R.find(r => r[0] === Render.meId);
+    if (myR && myR[1] !== 1 && myR[1] !== n && fk > 1.2) { const k = back2(clamp((fk - 1.2) / .4, 0, 1)); ctx.save(); ctx.translate(130, 48); ctx.scale(k, k); panel(ctx, -110, -32, 220, 64, 'rgba(40,30,90,.85)', '#ffe14d'); txt(ctx, 'あなたの順位', 0, -15, 12, '#ffe14d', 'center', 3); txt(ctx, myR[1] + '位 / ' + n + '人', 0, 10, 26, '#ffffff', 'center', 5); ctx.restore(); }
+    this.resultDone = fk > 3;
+    if (blink && fk > 3) txt(ctx, Net.role === 'client' ? 'ホストの操作を待っています…' : 'Z: タイトルへ戻る', W / 2, H - 16, 16, '#fff', 'center', 3);
   },
 };

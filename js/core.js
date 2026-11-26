@@ -110,7 +110,7 @@ const Sound = {
     const f = SFX[name]; if (f) f(this, Math.min(1, vol));
   },
 };
-const SFX_GAP = { shot: 55, hit: 40, pick: 45, boom: 50 };
+const SFX_GAP = { shot: 55, hit: 40, pick: 45, boom: 50, drum: 15, stamp: 30 };
 const SFX = {
   shot: (s, v) => { s.tone(1100 + Math.random() * 300, 0.07, 'square', 0.11 * v, 0.35); s.noise(0.04, 0.12 * v, 6000); },
   shotB: (s, v) => { s.tone(260, 0.16, 'sawtooth', 0.16 * v, 0.3, 0, s.crunch); s.noise(0.1, 0.2 * v, 1800); },
@@ -139,6 +139,12 @@ const SFX = {
   back: (s, v) => s.tone(440, 0.08, 'square', 0.1 * v, 0.6),
   win: (s, v) => { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => s.tone(f, 0.22, 'square', 0.12 * v, 1, i * 0.13)); },
   roulette: (s, v) => s.tone(1000, 0.03, 'square', 0.06 * v),
+  // 試合終了のホイッスル(ピッ ピッ ピーーッ)
+  whistle: (s, v) => { [[0, .14], [.2, .14], [.42, .75]].forEach(([d, L]) => { s.tone(2350, L, 'square', .11 * v, 1.02, d); s.tone(2480, L, 'sine', .1 * v, .99, d); s.noise(L, .12 * v, 7000, d); }); },
+  // 文字が叩きつけられる音
+  stamp: (s, v) => { s.tone(95, .28, 'sawtooth', .38 * v, .4, 0, s.crunch); s.noise(.22, .5 * v, 2600); s.tone(190, .12, 'square', .15 * v, .5); },
+  // ドラムロール用のスネア1打
+  drum: (s, v) => { s.noise(.07, .3 * v, 3800); s.tone(210, .05, 'triangle', .12 * v, .7); },
 };
 
 // --- 小さなチップチューン BGM シーケンサ ---

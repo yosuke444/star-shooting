@@ -4,7 +4,7 @@
 // ============================================================
 const DT = 1 / 60;
 const CPU_NAMES = ['ポチ', 'タマ', 'ジロー', 'ハヤテ', 'コメット', 'ルナ', 'ソラ', 'ミント', 'レオ', 'ナギ', 'ピコ', 'ガロ', 'ユキ', 'ベガ', 'リゲル', 'シリウス', 'ノヴァ', 'クロ', 'モモ', 'キラ', 'ジェット', 'ボルト', 'メテオ', 'アトム'];
-const RESPAWN_T = 12, BATTLE_RESPAWN = 3;
+const RESPAWN_T = 12, BATTLE_RESPAWN = 3, STATUS_TIME = 10; // STATUS_TIME: バトル前のステータス確認タイム(秒)
 
 class SpatialGrid {
   constructor(cell) { this.c = cell; this.m = new Map(); this.pool = []; }
@@ -397,15 +397,21 @@ class Game {
     const dt = DT; this.tick++; this.elapsed += dt;
     if (this.phase === 'train') {
       this.t -= dt;
-      if (this.t <= 0) { this.startRoulette(); return; }
+      if (this.t <= 0) { this.startTrainEnd(); return; }
       Events.update(this, dt);
       this.spawnLoop(dt);
+    } else if (this.phase === 'trainEnd') { // タイムアップ演出中は世界ごと止める
+      this.endT -= dt; if (this.endT <= 0) this.startStatus();
+      return;
+    } else if (this.phase === 'status') { // ステータス確認タイム(時間が来たら自動でステージ抽選へ)
+      this.t -= dt; if (this.t <= 0) this.startRoulette();
+      return;
     } else if (this.phase === 'roulette') {
       this.rou.t += dt; if (this.rou.t >= this.rou.dur) this.startBattle(this.rou.sel);
       return;
     } else if (this.phase === 'battle') {
       if (this.count > 0) { this.count -= dt; if (this.count <= 0) this.fx('go', 0, 0); }
-      else if (!this.over) { this.updateZone(dt); this.t -= dt; if (this.t <= 0) { this.t = 0; this.over = true; this.endT = 2.5; this.bullets.length = 0; this.gfxEv('timeup'); } }
+      else if (!this.over) { this.updateZone(dt); this.t -= dt; if (this.t <= 0) { this.t = 0; this.over = true; this.endT = 4.6; this.bullets.length = 0; this.gfxEv('timeup'); } }
       else { this.endT -= dt; if (this.endT <= 0) { this.finish(); return; } }
     } else if (this.phase === 'result') { this.t -= dt; return; }
 
@@ -617,6 +623,15 @@ class Game {
   // ============================================================
   //  フェーズ遷移
   // ============================================================
+  startTrainEnd() {
+    Events.endAll(this);
+    this.phase = 'trainEnd'; this.t = 0; this.endT = 4.4; this.bullets.length = 0; this.pending = [];
+    this.gfxEv('phase', 'trainEnd');
+  }
+  startStatus() {
+    this.phase = 'status'; this.t = STATUS_TIME;
+    this.gfxEv('phase', 'status');
+  }
   startRoulette() {
     Events.endAll(this);
     this.phase = 'roulette'; this.t = 0;

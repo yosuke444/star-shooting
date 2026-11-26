@@ -92,7 +92,7 @@ const Net = {
     });
     const c = g.evt && g.evt.cur;
     return {
-      ph: g.phase, T: r1(g.t * 10), cnt: r1(g.count * 10), bt: r1((g.battleT || 0) * 10), P,
+      ph: g.phase, T: r1(g.t * 10), cnt: r1(g.count * 10), ov: g.over ? 1 : 0, sa: g.phase === 'status' ? g.players.map(p => p.st) : null, bt: r1((g.battleT || 0) * 10), P,
       C: g.chests.map(ch => [ch.id, CHEST_T.indexOf(ch.type), r1(ch.x), r1(ch.y), ch.mhp > 1e8 ? 100 : Math.ceil(ch.hp / ch.mhp * 100), ch.flash > 0 ? 1 : 0]),
       M: g.machines.map(m => [m.id, r1(m.x), r1(m.y), m.m, r1(m.a * 100)]),
       W: g.wilds.map(w => [w.id, r1(w.x), r1(w.y), w.m, r1(w.a * 100), r1(w.stun * 10), w.legend ? 1 : 0, Math.ceil(w.hp / w.mhp * 100), w.flash > 0 ? 1 : 0]),
@@ -173,7 +173,8 @@ class ClientView {
   apply(d) {
     this.lastQ = d.q; const c = d.c; this.got = true;
     const prevPhase = this.phase;
-    this.phase = c.ph; this.t = c.T / 10; this.count = c.cnt / 10; this.battleT = c.bt / 10;
+    this.phase = c.ph; this.t = c.T / 10; this.count = c.cnt / 10; this.battleT = c.bt / 10; this.over = !!c.ov;
+    if (c.sa) c.sa.forEach((s, i) => { if (this.players[i] && i !== this.you) this.players[i].st = s; });
     if (c.ph === 'battle' && (this.arena !== c.ar || prevPhase !== 'battle')) { this.arena = c.ar; this.map = genArena(c.ar, c.as, this.players.length); this.bullets = []; }
     this.rou = c.rou ? { sel: c.rou[0], t: c.rou[1] / 100, dur: c.rou[2] } : null; this.result = c.res;
     c.P.forEach((a, i) => {
@@ -229,7 +230,7 @@ class ClientView {
   update(dt, mask) {
     const k = 1 - Math.exp(-dt * 14);
     for (const p of this.players) {
-      if (p.id === this.you && !p.dead && !p.out && this.phase !== 'roulette' && this.phase !== 'result' && !p.arw) { this.predict(p, dt, mask); p.aim = (p.aim ?? p.a) + angDiff(p.aim ?? p.a, p.aimT ?? p.a) * k; continue; }
+      if (p.id === this.you && !p.dead && !p.out && this.phase !== 'roulette' && this.phase !== 'result' && this.phase !== 'trainEnd' && this.phase !== 'status' && !p.arw) { this.predict(p, dt, mask); p.aim = (p.aim ?? p.a) + angDiff(p.aim ?? p.a, p.aimT ?? p.a) * k; continue; }
       p.pred = false;
       p.tx += (p.tvx || 0) * dt; p.ty += (p.tvy || 0) * dt;
       p.x = lerp(p.x, p.tx, k); p.y = lerp(p.y, p.ty, k); p.a += angDiff(p.a, p.ta ?? p.a) * k; p.vx = p.svx; p.vy = p.svy; p.aim = p.a;
@@ -248,7 +249,7 @@ class ClientView {
   }
   predict(p, dt, mask) {
     p.pred = true;
-    const frozen = this.phase === 'battle' && this.count > 0; const m = frozen ? 0 : mask;
+    const frozen = this.phase === 'battle' && (this.count > 0 || this.over); const m = frozen ? 0 : mask;
     const lock = p.charging, dir = lock ? null : maskDir(m), z = !lock && (m & IN.Z) !== 0; // ボムのチャージ中は動けない
     stepMachine(p, dir, z, dt, this.map, this.ss);
     // サーバー位置へ徐々に寄せる

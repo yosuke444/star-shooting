@@ -46,7 +46,8 @@ const Render = {
       const A = V.players[UI.ko.k], B = V.players[UI.ko.v];
       tgt = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2, vx: 0, vy: 0 }; zoom = clamp(Math.min(LW / (Math.abs(A.x - B.x) + 150), LH / (Math.abs(A.y - B.y) + 110)), .55, 1.7);
     }
-    if (V.phase === 'roulette' || V.phase === 'result') zoom = 1;
+    if (UI.timeUp) zoom = 1.25; // タイムアップ演出中は少し寄る
+    if (V.phase === 'roulette' || V.phase === 'result' || V.phase === 'status') zoom = 1;
     c.kick = Math.max(0, (c.kick || 0) - dt * 1.2); // 爆発時のズームパンチ
     c.base = lerp(c.base || 1, zoom, Math.min(1, dt * 4)); c.zoom = c.base * (1 + c.kick);
     if (tgt) {
