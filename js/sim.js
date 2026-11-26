@@ -128,8 +128,8 @@ class Game {
   }
   scatter(x, y, codes, spd = 90, tag) {
     for (const k of codes) {
-      const a = Math.random() * TAU, v = rnd(spd * .4, spd);
-      const pk = { id: this.id(), x, y, z: 0, vz: rnd(60, 110), vx: Math.cos(a) * v, vy: Math.sin(a) * v, k, t: 0, life: k < PK_ITEM ? 50 : (k >= PK_PART ? 1e9 : 70), tag };
+      const a = Math.random() * TAU, v = rnd(spd * .55, spd * 1.45); // 派手に飛び散る
+      const pk = { id: this.id(), x, y, z: 0, vz: rnd(110, 190), vx: Math.cos(a) * v, vy: Math.sin(a) * v, k, t: 0, life: k < PK_ITEM ? 50 : (k >= PK_PART ? 1e9 : 70), tag };
       this.pickups.push(pk);
     }
     if (this.pickups.length > 520) { // 古いステータスから消す
@@ -185,7 +185,7 @@ class Game {
       const dmg = 62 * p.sa;
       this.forTargets(p.x, p.y, 78, (o, kind) => {
         if (kind === 1 && o.id === p.id) return; const a = Math.atan2(o.y - p.y, o.x - p.x);
-        if (Math.abs(angDiff(p.a, a)) < 1.25 || d2(o.x, o.y, p.x, p.y) < 18 * 18) this.hit(o, kind, dmg, p.id, p.x, p.y);
+        if (Math.abs(angDiff(p.a, a)) < 1.25 || d2(o.x, o.y, p.x, p.y) < 18 * 18) this.hit(o, kind, dmg, p.id, p.x, p.y, 3);
       });
       if (it.n <= 0) p.items.shift();
       return;
@@ -196,14 +196,14 @@ class Game {
   }
   explode(x, y, r, dmg, src, big) {
     this.fx(big ? 'bigbomb' : 'bomb', x, y, r);
-    this.forTargets(x, y, r, (o, kind) => { if (kind === 1 && o.id === src) return; this.hit(o, kind, dmg, src, x, y); });
+    this.forTargets(x, y, r, (o, kind) => { if (kind === 1 && o.id === src) return; this.hit(o, kind, dmg, src, x, y, big ? 2 : 1); });
   }
   // ビッグアロー: 太い光線が 0.6 秒残って 6 回ヒット(防御特化以外はほぼ確殺)
   fireArrow(p, first) {
     const B = p.beam, ca = Math.cos(B.a), sa = Math.sin(B.a), half = 40, dmg = 68 * p.sa;
     if (first) this.fx('beam', B.x, B.y, Math.round(B.a * 1000));
     const test = (o, r) => { const dx = o.x - B.x, dy = o.y - B.y, along = dx * ca + dy * sa; if (along < 0) return false; const perp = Math.abs(-dx * sa + dy * ca); return perp < half + r; };
-    for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, B.x, B.y);
+    for (const q of this.players) if (q !== p && !q.out && q.dead <= 0 && test(q, 7)) this.hit(q, 1, dmg, p.id, B.x, B.y, 4);
     for (const e of this.enemies) if (test(e, 6)) this.hit(e, 2, dmg, p.id, B.x, B.y);
     for (const c of this.chests) if (test(c, 9)) this.hit(c, 3, dmg, p.id, B.x, B.y);
     if (this.boss && test(this.boss, 38)) this.hit(this.boss, 4, dmg, p.id, B.x, B.y);
@@ -221,9 +221,10 @@ class Game {
     for (const w of this.wilds) if (d2(w.x, w.y, x, y) < R2(8)) fn(w, 6);
   }
   // ---------- ダメージ ----------
-  hit(o, kind, dmg, src, sx, sy) {
+  // cause: 0=ショット 1=ミニボム 2=ビッグボム 3=ビッグソード 4=ビッグアロー 5=体当たり(撃破演出で決め手を見せる)
+  hit(o, kind, dmg, src, sx, sy, cause = 0) {
     switch (kind) {
-      case 1: this.damagePlayer(o, dmg, src); break;
+      case 1: this.damagePlayer(o, dmg, src, false, cause, sx, sy); break;
       case 2: this.damageEnemy(o, dmg, src); break;
       case 3: this.damageChest(o, dmg, src); break;
       case 4: Events.damageBoss(this, o, dmg, src); break;
@@ -231,12 +232,12 @@ class Game {
       case 6: Events.damageWild(this, o, dmg, src); break;
     }
   }
-  damagePlayer(p, raw, src, trueDmg) {
+  damagePlayer(p, raw, src, trueDmg, cause = 0, sx = 0, sy = 0) {
     if (p.dead > 0 || p.out || p.inv > 0 || p.buf.bar > 0) return;
     if (this.phase === 'battle' && (this.count > 0 || this.over)) return;
     if (this.phase !== 'train' && this.phase !== 'battle') return;
     const d = trueDmg ? raw : raw / p.sd / HP_SCALE;
-    p.hp -= d; p.flash = .14; if (src >= 0) { p.lastAtk = src; p.lastAtkT = this.elapsed; }
+    p.hp -= d; p.flash = .14; if (src >= 0) { p.lastAtk = src; p.lastAtkT = this.elapsed; p.lastCause = [cause, Math.round(sx), Math.round(sy)]; }
     if (d > 1.5) this.fx('hurt', p.x, p.y, p.id, Math.min(99, Math.round(d)));
     if (this.phase === 'train') { p.dmgAcc += d; while (p.dmgAcc >= 25) { p.dmgAcc -= 25; this.shed(p, 1); } }
     if (partsN(p) > 0 && Math.random() < d / 55) { const held = []; for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) if (p.parts[k] & (1 << i)) held.push([k, i]); const [k, i] = pick(held); p.parts[k] &= ~(1 << i); this.scatter(p.x, p.y, [PK_PART + k * 3 + i], 80); this.note(p, 'パーツを落とした!', '#ff4d4d', 'x'); }
@@ -255,7 +256,8 @@ class Game {
   killPlayer(p, killerId) {
     const K = killerId >= 0 ? this.players[killerId] : null;
     p.hp = 0; this.fx('death', p.x, p.y, p.m, p.id);
-    this.gfxEv('kill', K && K !== p ? K.id : -1, p.id);
+    const lc = p.lastCause && this.elapsed - p.lastAtkT < .6 ? p.lastCause : [0, 0, 0];
+    this.gfxEv('kill', K && K !== p ? K.id : -1, p.id, lc[0], lc[1], lc[2]);
     if (K && K !== p) { K.kills++; this.note(K, p.name + ' を撃破!', '#ffe14d'); }
     // パーツ・鍵・アイテムは確定ドロップ
     const drops = [];
@@ -269,7 +271,7 @@ class Game {
       for (let i = 0; i < lose; i++) { const have = [0, 1, 2, 3].filter(k => p.st[k] > 0); if (!have.length) break; const k = pick(have); p.st[k]--; removed.push(k); }
       const gain = K && K !== p ? Math.floor(removed.length / 2) : 0; // どんなに遠くても半分は倒した人へ
       if (gain) this.give(K, removed.splice(0, gain), p.x, p.y);
-      this.scatter(p.x, p.y, removed.concat(drops), 120);
+      this.scatter(p.x, p.y, removed.concat(drops), 200);
       p.dead = RESPAWN_T; p.dmgAcc = 0;
       this.note(p, '撃破された… ' + RESPAWN_T + '秒後に復活', '#ff4d4d');
     } else {
@@ -290,7 +292,7 @@ class Game {
       // 倒した人(どんなに遠くても)がドロップの半分を受け取る
       const P = src >= 0 ? this.players[src] : null;
       if (P && !P.out) { const n = Math.floor((codes.length + 1) / 2); this.give(P, codes.splice(0, n), e.x, e.y); }
-      if (codes.length) this.scatter(e.x, e.y, codes, 50);
+      if (codes.length) this.scatter(e.x, e.y, codes, 80);
     }
   }
   damageChest(c, dmg, src) {
@@ -310,7 +312,7 @@ class Game {
       case 'I': loot = [this.rollItem(true)]; if (Math.random() < .5) loot.push(this.rollItem(false)); break;
     }
     this.fx('chest', c.x, c.y, 'BAGOLI'.indexOf(c.type));
-    if ((c.type === 'O' || c.type === 'L') || !P || P.dead > 0 || P.out) this.scatter(c.x, c.y, loot, c.type === 'O' || c.type === 'L' ? 140 : 80);
+    if ((c.type === 'O' || c.type === 'L') || !P || P.dead > 0 || P.out) this.scatter(c.x, c.y, loot, c.type === 'O' || c.type === 'L' ? 230 : 150);
     else { this.give(P, loot, c.x, c.y); this.note(P, '宝箱 総取り!', '#ffe14d'); }
     c.hp = 0;
   }
@@ -471,7 +473,7 @@ class Game {
     const mv = MACHINES[p.m].mv, ram = (mv === 'tank' || (mv === 'dash' && p.dashT > 0)) && Math.hypot(p.vx, p.vy) > 55, rr = MACHINES[p.m].big ? 18 : 14;
     this.grid.each(p.x, p.y, o => {
       if (o._k === 1 && o !== p) { const dd = d2(o.x, o.y, p.x, p.y); if (dd < 144 && dd > .01) { const d = Math.sqrt(dd), push = (12 - d) * .5; p.x -= (o.x - p.x) / d * push; p.y -= (o.y - p.y) / d * push; } }
-      if (ram && (o._k === 1 || o._k === 2) && o !== p && !(o.ramT > this.elapsed) && d2(o.x, o.y, p.x, p.y) < rr * rr) { o.ramT = this.elapsed + .5; this.hit(o, o._k, (mv === 'tank' ? 16 : 8) * p.sa, p.id, p.x, p.y); this.fx('ram', o.x, o.y, p.m); const a = Math.atan2(o.y - p.y, o.x - p.x); o.vx = Math.cos(a) * 240; o.vy = Math.sin(a) * 240; }
+      if (ram && (o._k === 1 || o._k === 2) && o !== p && !(o.ramT > this.elapsed) && d2(o.x, o.y, p.x, p.y) < rr * rr) { o.ramT = this.elapsed + .5; this.hit(o, o._k, (mv === 'tank' ? 16 : 8) * p.sa, p.id, p.x, p.y, 5); this.fx('ram', o.x, o.y, p.m); const a = Math.atan2(o.y - p.y, o.x - p.x); o.vx = Math.cos(a) * 240; o.vy = Math.sin(a) * 240; }
     });
     // 鍵付き宝箱
     if (p.key) for (const c of this.chests) if (c.type === 'L' && d2(c.x, c.y, p.x, p.y) < 22 * 22) { p.key = false; this.openChest(c, p.id); this.gfxEv('unlock', p.id); break; }

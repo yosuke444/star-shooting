@@ -88,7 +88,7 @@ const Events = {
     if (src >= 0) { b.dmgBy[src] = (b.dmgBy[src] || 0) + dmg; b.last = src; }
     if (b.hp <= 0) {
       g.fx('bossDie', b.x, b.y);
-      g.scatter(b.x, b.y, g.makeLoot(14, 1, 1, .5, .2).concat([g.rollItem(true), g.rollItem(true), g.rollItem(false)]), 170);
+      g.scatter(b.x, b.y, g.makeLoot(14, 1, 1, .5, .2).concat([g.rollItem(true), g.rollItem(true), g.rollItem(false)]), 260);
       const rank = Object.entries(b.dmgBy).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => +e[0]);
       const rewards = [[6, 1], [4, 1], [3, 0]];
       rank.forEach((id, i) => { const p = g.players[id]; if (p && !p.out && p.dead <= 0) { g.give(p, g.makeLoot(rewards[i][0], 0, rewards[i][1]), b.x, b.y); g.note(p, 'ダメージ' + (i + 1) + '位ボーナス!', '#ffe14d'); } });
@@ -165,12 +165,12 @@ const Events = {
     if (c.spawn <= 0 && c.t > 1.2) { c.spawn = c.dur / (g.n() * 3); const pos = g.map.freePos(6); g.meteors.push({ id: g.id(), x: pos.x, y: pos.y, t: 0, fall: 1.1, r: 0, big: 0, kind: 2 }); }
   },
   landMeteor(g, m) {
-    if (m.kind === 2) { g.fx('starLand', m.x, m.y); g.scatter(m.x, m.y, Math.random() < .3 ? [rndi(0, 3), rndi(0, 3)] : [rndi(0, 3)], 40); return; }
+    if (m.kind === 2) { g.fx('starLand', m.x, m.y); g.scatter(m.x, m.y, Math.random() < .3 ? [rndi(0, 3), rndi(0, 3)] : [rndi(0, 3)], 90); return; }
     g.fx(m.big ? 'megaImpact' : 'impact', m.x, m.y, m.r);
     const dmg = m.big ? 60 : 22;
     g.forTargets(m.x, m.y, m.r, (o, kind) => g.hit(o, kind, kind === 1 ? dmg : dmg * 3, -1, m.x, m.y));
-    if (m.big) g.scatter(m.x, m.y, g.makeLoot(18, 1, 1, .4, .15).concat([g.rollItem(true), g.rollItem(false)]), 220);
-    else if (Math.random() < .12) g.scatter(m.x, m.y, [rndi(0, 3)], 30);
+    if (m.big) g.scatter(m.x, m.y, g.makeLoot(18, 1, 1, .4, .15).concat([g.rollItem(true), g.rollItem(false)]), 320);
+    else if (Math.random() < .12) g.scatter(m.x, m.y, [rndi(0, 3)], 80);
   },
 
   // ---------- ゴールドラッシュ ----------
@@ -195,7 +195,7 @@ const Events = {
     // 体力の概念なし: ダメージが一定たまるたびにアイテム・ステータスがこぼれる
     f.acc += dmg; f.flash = .12;
     const step = f.mhp * .012;
-    while (f.acc >= step) { f.acc -= step; g.scatter(f.x, f.y, [Math.random() < .15 ? g.rollItem(Math.random() < .25) : rndi(0, 3)], 120); }
+    while (f.acc >= step) { f.acc -= step; g.scatter(f.x, f.y, [Math.random() < .15 ? g.rollItem(Math.random() < .25) : rndi(0, 3)], 180); }
   },
 
   // ---------- マシン襲来 ----------
@@ -248,7 +248,7 @@ const Events = {
     c.spawn -= dt;
     if (c.spawn <= 0) {
       c.spawn = Math.max(.4, 2.4 - g.n() * .02);
-      const cn = pick(c.corners); if (cn) { const pos = { x: cn.x, y: cn.y }; g.map.unstuck(pos, 4); const codes = [rndi(0, 3)]; if (Math.random() < .4) codes.push(rndi(0, 3)); if (Math.random() < .2) codes.push(g.rollItem(Math.random() < .3)); g.fx('flowerPop', pos.x, pos.y); g.scatter(pos.x, pos.y, codes, 40, 'maze'); }
+      const cn = pick(c.corners); if (cn) { const pos = { x: cn.x, y: cn.y }; g.map.unstuck(pos, 4); const codes = [rndi(0, 3)]; if (Math.random() < .4) codes.push(rndi(0, 3)); if (Math.random() < .2) codes.push(g.rollItem(Math.random() < .3)); g.fx('flowerPop', pos.x, pos.y); g.scatter(pos.x, pos.y, codes, 90, 'maze'); }
     }
   },
   e_maze(g) { g.map.over = null; g.map.buildMini(); let n = 0; g.pickups = g.pickups.filter(k => { if (k.tag !== 'maze') return true; if (n++ % 3 === 0) g.fx('vanish', k.x, k.y); return false; }); }, // 残ったアイテムは消える(急いで集めよう)

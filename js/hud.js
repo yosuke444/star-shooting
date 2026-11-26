@@ -92,7 +92,7 @@ const UI = {
         const [, k, v] = a; const mine = k === me || v === me;
         if (k >= 0) this.addFeed(this.name(V, k) + ' ▶ ' + this.name(V, v), PLAYER_COLS[V.players[k]?.col ?? 0], mine);
         else this.addFeed(this.name(V, v) + ' が力尽きた', '#aaa', mine);
-        if (mine && k >= 0) this.startKO(V, k, v); // スマブラ風の撃破演出
+        if (mine && k >= 0) this.startKO(V, k, v, a[3] || 0, a[4], a[5]); // スマブラ風の撃破演出
         else if (v === me) { FX.stop(.25); }
         break;
       }
@@ -105,10 +105,10 @@ const UI = {
     }
   },
   // ---- 撃破演出: ①ヒットストップ+画面振動 → ②背景が倒した側の色になり、二人と決め手の弾幕だけを大写し・機体が木っ端微塵 ----
-  startKO(V, k, v) {
+  startKO(V, k, v, cause = 0, cx = 0, cy = 0) {
     const A = V.players[k], B = V.players[v];
     const bullets = V.bullets.filter(b => d2(b.x, b.y, B.x, B.y) < 140 * 140).slice(0, 40).map(b => ({ x: b.x - B.x, y: b.y - B.y, vx: b.vx, vy: b.vy, col: b.col, r: b.r }));
-    this.ko = { t: 0, k, v, col: MACHINES[A.m].col, life: 2, bullets, frags: shatter(B.m), m: B.m, boom: false };
+    this.ko = { t: 0, k, v, col: MACHINES[A.m].col, life: 2, bullets: cause ? [] : bullets, frags: shatter(B.m), m: B.m, boom: false, cause, cx, cy };
     FX.stop(.32); FX.addShake(22); FX.kick(.25); FX.flash = .35; FX.flashCol = '#ffffff'; Sound.play('hurt', 1); Sound.play('hit', 1);
   },
   // ---- 伝説マシン完成: カットイン + 全員の視点を移す + 機体ごとの専用演出 ----
@@ -234,6 +234,8 @@ const UI = {
   // 取得アイコン: 画面中央にドン → 小さくなってステータス欄へ飛ぶ
   drawPops(ctx, V, time) {
     const me = V.players[Render.meId], ox = me ? Render.sx(me.x) : W / 2, oy = me ? Render.sy(me.y) - 78 * Render.cam.zoom : H / 2;
+    // パーツ取得中は周りを暗くして主役を際立たせる
+    const pp = this.pops.find(p => p.ic[0] === 'p'); if (pp) { const k = pp.t / pp.life, a = (k < .1 ? k / .1 : k > .8 ? (1 - k) / .2 : 1) * .5, g = ctx.createRadialGradient(ox, oy, 60, ox, oy, 420); g.addColorStop(0, 'rgba(0,0,10,0)'); g.addColorStop(1, `rgba(0,0,10,${a})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
     for (const p of this.pops) {
       const k = p.t / p.life, cx = ox, cy = oy;
       const pop = k < .25 ? .3 + k / .25 * 1.1 : k < .4 ? 1.4 - (k - .25) * 2.6 : 1, out = k > .7 ? (1 - k) / .3 : 1;
@@ -272,8 +274,9 @@ const UI = {
     ctx.fillStyle = K.col; ctx.fillRect(0, 0, W, H);
     rays(ctx, bx, by, 40, 1000, 28, '#ffffff', time * .8, .22);
     ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < 30; i++) { const a = i / 30 * TAU + time * .5, r = 120 + ((time * 600 + i * 50) % 500); ctx.fillRect(bx + Math.cos(a) * r, by + Math.sin(a) * r, 46, 3); }
+    // 決め手になった攻撃: アイテムならその攻撃そのものを大写し(BREAK の文字より下)
+    if (K.cause) this.drawKOCause(ctx, K, ax, ay, bx, by, Render.cam.zoom * SCALE, t, time);
     { const s = k < .1 ? 3 - k / .1 * 2 : 1; ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(-.08); ctx.scale(s, s); ctx.globalAlpha *= .9; txt(ctx, 'BREAK!!', 0, 0, 110, '#ffffff', 'center', 12, '#0b0b18'); ctx.restore(); }
-    // 決め手になった弾幕(スローモーション)
     const z = Render.cam.zoom * SCALE;
     for (const b of K.bullets) { const x = bx + (b.x + b.vx * t * .12) * z, y = by + (b.y + b.vy * t * .12) * z, C = BULLET_COL[b.col] || BULLET_COL[0], r = Math.max(4, (b.r + 2) * z); ctx.fillStyle = C[1]; ctx.beginPath(); ctx.arc(x, y, r * 1.6, 0, TAU); ctx.fill(); ctx.fillStyle = C[0]; ctx.beginPath(); ctx.arc(x, y, r * .8, 0, TAU); ctx.fill(); }
     // 倒した側
@@ -282,6 +285,28 @@ const UI = {
     for (const f of K.frags) { const d = t * 1.6; ctx.save(); ctx.translate(bx + (f.ox * s + f.vx * d * 90), by + (f.oy * s + f.vy * d * 90 + d * d * 60)); ctx.rotate(f.vr * d); ctx.globalAlpha *= Math.max(0, 1 - d * .45); ctx.drawImage(f.img, -f.img.width * s / 2, -f.img.height * s / 2, f.img.width * s, f.img.height * s); ctx.restore(); }
     if (t < .5) rays(ctx, bx, by, 10, 80 + t * 300, 12, '#fff6a0', -time * 3, 1 - t * 2);
     txt(ctx, A.name, ax, ay - 70, 26, '#ffffff', 'center', 6); txt(ctx, B.name, bx, by + 80, 22, '#ffffff', 'center', 5);
+    ctx.restore();
+  },
+  drawKOCause(ctx, K, ax, ay, bx, by, z, t, time) {
+    const ox = Render.sx(K.cx), oy = Render.sy(K.cy), pulse = 1 + Math.sin(time * 18) * .04;
+    ctx.save();
+    if (K.cause === 1 || K.cause === 2) { // ボム: その爆発
+      const R = Math.min(K.cause === 2 ? 230 : 150, (K.cause === 2 ? 130 : 62) * z) * pulse;
+      const g = ctx.createRadialGradient(ox, oy, R * .1, ox, oy, R); g.addColorStop(0, 'rgba(255,255,230,.95)'); g.addColorStop(.5, 'rgba(255,170,60,.85)'); g.addColorStop(1, 'rgba(255,60,30,.0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, R, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(ox, oy, R * .92, 0, TAU); ctx.stroke();
+      rays(ctx, ox, oy, R * .3, R * 1.3, 16, '#fff3b0', time * 2, .7); iconC(ctx, GFX.itemUI[K.cause === 2 ? 'bbomb' : 'mbomb'], ox, oy, 5);
+    } else if (K.cause === 3) { // ビッグソード: 斬撃の弧
+      const a = Math.atan2(by - ay, bx - ax), R = 78 * z;
+      ctx.translate(ax, ay); ctx.rotate(a); ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.beginPath(); ctx.arc(0, 0, R, -1.3, 1.3); ctx.arc(-R * .25, 0, R * .85, 1.2, -1.2, true); ctx.fill();
+      ctx.fillStyle = '#ff4d4d'; ctx.beginPath(); ctx.arc(0, 0, R * 1.08, -1.25, 1.25); ctx.arc(0, 0, R * .98, 1.2, -1.2, true); ctx.fill();
+      ctx.rotate(-a); iconC(ctx, GFX.itemUI.sword, Math.cos(a) * R * .55, Math.sin(a) * R * .55 - 40, 4);
+    } else if (K.cause === 4) { // ビッグアロー: 極太の光線
+      const a = Math.atan2(by - oy, bx - ox); ctx.translate(ox, oy); ctx.rotate(a); const wd = 80 * z * pulse;
+      ctx.fillStyle = 'rgba(255,204,51,.9)'; ctx.fillRect(0, -wd / 2, 3000, wd); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, -wd / 4, 3000, wd / 2);
+      ctx.rotate(-a); iconC(ctx, GFX.itemUI.arrow, 0, -60, 4);
+    } else if (K.cause === 5) { // 体当たり: 衝突の星
+      const mx = (ax + bx) / 2, my = (ay + by) / 2; rays(ctx, mx, my, 10, 120, 10, '#ffffff', time * 4, .9); ctx.fillStyle = '#ffe14d'; ctx.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 22 : 50, an = i / 10 * TAU + time; ctx.lineTo(mx + Math.cos(an) * r, my + Math.sin(an) * r); } ctx.fill();
+    }
     ctx.restore();
   },
   // 伝説マシン完成カットイン
@@ -355,7 +380,7 @@ const UI = {
       if (p.out || !Render.onScreen(p.x, p.y) || p.id === Render.meId) continue;
       const x = Render.sx(p.x), y = Render.sy(p.y) - 30 * Render.cam.zoom;
       if (p.dead > 0) continue;
-      this.hpRing(ctx, Render.sx(p.x), Render.sy(p.y), 30 * Render.cam.zoom * (MACHINES[p.m].big ? 1.3 : 1), p.hp, time, .75, 4);
+      this.hpRing(ctx, Render.sx(p.x), Render.sy(p.y), 32 * Render.cam.zoom * (MACHINES[p.m].big ? 1.3 : 1), p.hp, time, 1, 6);
       const ny = Render.sy(p.y) - 46 * Render.cam.zoom * (MACHINES[p.m].big ? 1.3 : 1), col = PLAYER_COLS[p.col];
       ctx.font = `14px ${FONT}`; const tw = ctx.measureText(p.name).width + 14;
       ctx.fillStyle = 'rgba(8,8,24,.75)'; ctx.fillRect(x - tw / 2, ny - 10, tw, 20); ctx.fillStyle = col; ctx.fillRect(x - tw / 2, ny - 10, tw, 2); ctx.fillRect(x - tw / 2, ny + 8, tw, 2); ctx.fillRect(x - tw / 2, ny - 10, 2, 20); ctx.fillRect(x + tw / 2 - 2, ny - 10, 2, 20);
@@ -383,7 +408,7 @@ const UI = {
   drawRings(ctx, V, me, time) {
     if (!me || me.out || me.dead > 0) return;
     const x = Render.sx(me.x), y = Render.sy(me.y), z = Render.cam.zoom, R = 44 * z * (MACHINES[me.m].big ? 1.3 : 1);
-    this.hpRing(ctx, x, y, R, me.hp, time, .9, 6);
+    this.hpRing(ctx, x, y, R, me.hp, time, 1, 9);
     ctx.lineCap = 'round'; let rr = R + 10;
     if (me.buf) for (const [k, si] of BUFF_LIST) if (me.buf[k] > 0) {
       const f = clamp(me.buf[k] / BUFF_MAX[k], 0, 1); ctx.globalAlpha = .9; ctx.strokeStyle = STAT_COL[si]; ctx.lineWidth = 5;
@@ -394,7 +419,8 @@ const UI = {
   hpRing(ctx, x, y, R, hpv, time, alpha, lw) {
     const hp = clamp(hpv / 100, 0, 1), col = hp > .5 ? '#5fe36a' : hp > .25 ? '#ffd23f' : '#ff4d4d';
     ctx.lineCap = 'round';
-    ctx.globalAlpha = alpha * .45; ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = lw + 3; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * 2.3); ctx.stroke();
+    ctx.globalAlpha = alpha * .9; ctx.strokeStyle = '#0b0b18'; ctx.lineWidth = lw + 5; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * 2.3); ctx.stroke(); // 暗い溝
+    ctx.strokeStyle = 'rgba(90,30,40,.9)'; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * 2.3); ctx.stroke();
     ctx.globalAlpha = hp < .25 ? alpha * (.6 + Math.sin(time * 14) * .4) : alpha; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(x, y, R, Math.PI * .7, Math.PI * .7 + Math.PI * 1.6 * hp); ctx.stroke();
     ctx.globalAlpha = 1; ctx.lineCap = 'butt';
   },

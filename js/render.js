@@ -5,6 +5,7 @@
 // パーツ画像(種類 k = 0..2 → その試合での伝説マシンの色)
 function partImg(V, idx) { const k = Math.floor(idx / 3), id = V.legendOrder ? V.legendOrder[k] : LEGEND_IDS[k]; return GFX.pieceIcon[Math.max(0, LEGEND_IDS.indexOf(id))][idx % 3]; }
 const Render = {
+  silCache: new Map(),
   cam: { x: 0, y: 0, zoom: 1, tx: 0, ty: 0 }, meId: 0, follow: 0,
   init(main) {
     this.main = main; this.ctx = main.getContext('2d');
@@ -76,14 +77,16 @@ const Render = {
     for (const m of V.machines) if (m.x > X0 && m.x < X1 && m.y > Y0 && m.y < Y1) this.drawFreeMachine(m, time);
     for (const e of V.enemies) if (e.x > X0 && e.x < X1 && e.y > Y0 && e.y < Y1) this.drawEnemy(e, time);
     for (const wl of V.wilds) if (wl.x > X0 && wl.x < X1 && wl.y > Y0 && wl.y < Y1) this.drawWild(wl, time);
+    // 見せたい順に上へ: 煙や破片 → 機体(自分が一番上) → 命中の閃光 → 弾 → 危険の予告
+    Particles.draw(w, X0, Y0, X1, Y1);
     this.drawTrails(V, time, X0, Y0, X1, Y1);
-    for (const p of V.players) if (!p.out && p.x > X0 && p.x < X1 && p.y > Y0 && p.y < Y1) this.drawPlayer(V, p, time);
     if (V.fish) this.drawFish(V.fish, time);
     if (V.boss) this.drawBoss(V.boss, time);
+    for (const p of V.players) if (p.id !== this.meId && !p.out && p.x > X0 && p.x < X1 && p.y > Y0 && p.y < Y1) this.drawPlayer(V, p, time);
+    const meP = V.players[this.meId]; if (meP && !meP.out) { this.drawMeMarker(meP, time); this.drawPlayer(V, meP, time); }
     for (const b of V.balls) this.drawBall(b);
-    this.drawBullets(V, X0, Y0, X1, Y1, time);
     FxObjs.draw(w);
-    Particles.draw(w, X0, Y0, X1, Y1);
+    this.drawBullets(V, X0, Y0, X1, Y1, time);
     for (const m of V.meteors) this.drawMeteor(m, time);
     for (const p of V.players) if (p.arw && !p.out && p.dead <= 0) this.drawArrowWarn(p, time);
     this.drawOverlayBounds(V, time);
@@ -156,8 +159,12 @@ const Render = {
     else if (isPart(k.k)) { const kk = Math.floor((k.k - PK_PART) / 3); img = GFX.pieceIcon[Math.max(0, LEGEND_IDS.indexOf(V.legendOrder ? V.legendOrder[kk] : LEGEND_IDS[kk]))][(k.k - PK_PART) % 3]; }
     else if (k.k === PK_KEY) img = GFX.key;
     else img = GFX.item[ITEM_KEYS[k.k - PK_ITEM]];
-    if (k.k >= PK_ITEM) { w.globalAlpha = .4 + Math.sin(time * 6) * .2; w.fillStyle = isPart(k.k) || k.k === PK_KEY ? '#ffe14d' : RAR_COL[ITEMS[ITEM_KEYS[k.k - PK_ITEM]]?.rar] || '#fff'; w.beginPath(); w.arc(k.x, k.y - k.z + bob, 9, 0, TAU); w.fill(); w.globalAlpha = 1; }
-    this.spr(img, k.x, k.y - k.z + bob);
+    // 落ちている物は色の光輪 + 白い縁で背景から浮かせる
+    const halo = k.k < PK_ITEM ? STAT_COL[k.k] : isPart(k.k) || k.k === PK_KEY ? '#ffe14d' : RAR_COL[ITEMS[ITEM_KEYS[k.k - PK_ITEM]]?.rar] || '#fff', hy = k.y - k.z + bob, big = k.k >= PK_ITEM;
+    w.globalAlpha = .45 + Math.sin(time * 6 + k.id) * .2; w.fillStyle = halo; w.beginPath(); w.arc(k.x, hy, big ? 11 : 8, 0, TAU); w.fill(); w.globalAlpha = 1;
+    let sil = this.silCache.get(img); if (!sil) { sil = silhouette(img); this.silCache.set(img, sil); }
+    this.spr(sil, k.x, hy, 0, false, big ? 1.55 : 1.45);
+    this.spr(img, k.x, hy, 0, false, big ? 1.4 : 1.3);
   },
   drawChest(ch, time) {
     const w = this.w; let img;
@@ -179,7 +186,10 @@ const Render = {
     if (r < [0, .05, .14, .3][lv]) Particles.add(x + rnd(-spread, spread) * .6, y + rnd(-spread, spread) * .4, rnd(-6, 6), rnd(-34, -18), rnd(.6, 1.1), lv >= 2 ? 4 : 3, lv >= 3 && Math.random() < .5 ? C_DARK : C_SMOKE, 1.2);
     if (lv >= 3 && Math.random() < .14) Particles.add(x + rnd(-spread, spread) * .5, y + rnd(-spread, spread) * .4, rnd(-20, 20), rnd(-40, -10), .3, 2, Math.random() < .5 ? C_ORA : C_YEL, 2);
   },
-  bar(x, y, wd, f, col) { const w = this.w; x = Math.round(x - wd / 2); y = Math.round(y); w.fillStyle = '#0b0b18'; w.fillRect(x - 1, y - 1, wd + 2, 4); w.fillStyle = '#3a3a4a'; w.fillRect(x, y, wd, 2); w.fillStyle = col; w.fillRect(x, y, Math.max(0, Math.round(wd * clamp(f, 0, 1))), 2); },
+  // HP バー(太め・縁取り・白い光沢で目立つように)
+  bar(x, y, wd, f, col) { const w = this.w; wd = Math.round(wd * 1.5); x = Math.round(x - wd / 2); y = Math.round(y) - 1; w.fillStyle = '#0b0b18'; w.fillRect(x - 1, y - 1, wd + 2, 6); w.fillStyle = '#4a1a24'; w.fillRect(x, y, wd, 4); const fw = Math.max(0, Math.round(wd * clamp(f, 0, 1))); w.fillStyle = f > .5 ? col : f > .25 ? '#ffd23f' : '#ff4d4d'; w.fillRect(x, y, fw, 4); w.fillStyle = 'rgba(255,255,255,.55)'; w.fillRect(x, y, fw, 1); },
+  // 自分の居場所: 足元の黄色いリング(他の機体や粒子に埋もれない)
+  drawMeMarker(p, time) { if (p.dead > 0) return; const w = this.w, r = 15 + Math.sin(time * 6) * 1.5; w.globalAlpha = .8; w.strokeStyle = '#ffe14d'; w.lineWidth = 2; w.beginPath(); w.ellipse(p.x, p.y + 5, r, r * .45, 0, 0, TAU); w.stroke(); w.globalAlpha = 1; },
   drawFreeMachine(m, time) {
     const w = this.w, M = MACHINES[m.m]; const bob = Math.sin(time * 2.5 + m.id) * 1.5;
     const col = m.m === 0 ? '#ffffff' : M.legend ? PAL[RAINBOW[Math.floor(time * 10) % 8]] : STAT_COL[M.best];
@@ -376,6 +386,7 @@ const Render = {
         }
         default: {
           const r = b.r + (b.big ? 1 : 0);
+          w.fillStyle = 'rgba(11,11,24,.75)'; w.beginPath(); w.arc(x, y, r + 2.5, 0, TAU); w.fill(); // 暗い縁で背景から浮かせる
           w.globalCompositeOperation = 'lighter'; w.globalAlpha = .35; w.fillStyle = C[1]; w.beginPath(); w.arc(x, y, r + 4, 0, TAU); w.fill(); w.globalAlpha = 1; w.globalCompositeOperation = 'source-over';
           if (b.tr) { w.strokeStyle = C[1]; w.lineWidth = Math.max(1, r); w.globalAlpha = .7; w.beginPath(); w.moveTo(x, y); w.lineTo(x - b.vx * .03, y - b.vy * .03); w.stroke(); w.globalAlpha = 1; }
           w.fillStyle = C[1]; if (r <= 2) { w.fillRect(x - 2, y - 2, 4, 4); w.fillStyle = C[0]; w.fillRect(x - 1, y - 1, 2, 2); }
