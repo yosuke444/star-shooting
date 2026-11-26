@@ -291,7 +291,7 @@ const UI = {
     const ox = Render.sx(K.cx), oy = Render.sy(K.cy), pulse = 1 + Math.sin(time * 18) * .04;
     ctx.save();
     if (K.cause === 1 || K.cause === 2) { // ボム: その爆発
-      const R = Math.min(K.cause === 2 ? 230 : 150, (K.cause === 2 ? 130 : 62) * z) * pulse;
+      const R = Math.min(K.cause === 2 ? 220 : 150, (K.cause === 2 ? 115 : 62) * z) * pulse;
       const g = ctx.createRadialGradient(ox, oy, R * .1, ox, oy, R); g.addColorStop(0, 'rgba(255,255,230,.95)'); g.addColorStop(.5, 'rgba(255,170,60,.85)'); g.addColorStop(1, 'rgba(255,60,30,.0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, R, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(ox, oy, R * .92, 0, TAU); ctx.stroke();
       rays(ctx, ox, oy, R * .3, R * 1.3, 16, '#fff3b0', time * 2, .7); iconC(ctx, GFX.itemUI[K.cause === 2 ? 'bbomb' : 'mbomb'], ox, oy, 5);

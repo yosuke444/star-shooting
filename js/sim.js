@@ -168,8 +168,10 @@ class Game {
     }
   }
   // ---------- ダメージ系アイテムの予告(1秒後に発動。予告は全員に見える) ----------
-  warnAttack(p, kind) { this.pending.push({ kind, own: p.id, t: 1 }); this.fx('warnItem', p.x, p.y, p.id); }
-  get warns() { const out = []; for (const w of this.pending) { const o = this.players[w.own]; if (o) out.push({ k: w.kind, x: o.x, y: o.y, a: o.aim ?? o.a, t: w.t }); } return out; }
+  // ビッグボムは 1.5 秒、その他は 1 秒。ソードの向きは使った瞬間で固定
+  warnAttack(p, kind) { const T = kind === 'bbomb' ? 1.5 : 1; this.pending.push({ kind, own: p.id, t: T, T, a: p.aim ?? p.a }); this.fx('warnItem', p.x, p.y, p.id); }
+  bombCharging(p) { return this.pending.some(w => w.own === p.id && w.kind !== 'sword'); }
+  get warns() { const out = []; for (const w of this.pending) { const o = this.players[w.own]; if (o) out.push({ k: w.kind, x: o.x, y: o.y, a: w.a, t: w.t / w.T }); } return out; }
   updatePending(dt) {
     if (!this.pending.length) return;
     const frozen = this.phase === 'battle' && (this.count > 0 || this.over);
@@ -177,9 +179,9 @@ class Game {
       const p = this.players[w.own]; if (!p || p.out || p.dead > 0) return false; // 本人がやられたら不発
       if (frozen) return true; w.t -= dt; if (w.t > 0) return true;
       if (w.kind === 'mbomb') this.explode(p.x, p.y, 62, 26 * p.sa, p.id, 0);
-      else if (w.kind === 'bbomb') this.explode(p.x, p.y, 130, 66 * p.sa, p.id, 1);
+      else if (w.kind === 'bbomb') this.explode(p.x, p.y, 115, 66 * p.sa, p.id, 1);
       else {
-        const aim = p.aim ?? p.a, dmg = 62 * p.sa; p.slash = .25; this.fx('slash', p.x, p.y, Math.round(aim * 100));
+        const aim = w.a, dmg = 62 * p.sa; p.slash = .25; this.fx('slash', p.x, p.y, Math.round(aim * 100));
         this.forTargets(p.x, p.y, 78, (o, kind) => {
           if (kind === 1 && o.id === p.id) return; const a = Math.atan2(o.y - p.y, o.x - p.x);
           if (Math.abs(angDiff(aim, a)) < 1.25 || d2(o.x, o.y, p.x, p.y) < 18 * 18) this.hit(o, kind, dmg, p.id, p.x, p.y, 3);
@@ -455,9 +457,10 @@ class Game {
     const z = (m & IN.Z) !== 0; p.z = z;
     const xHit = (m & IN.X) && !(pm & IN.X), xUp = !(m & IN.X) && (pm & IN.X);
     const r = MACHINES[p.m].big ? 8 : 6;
-    // ビッグアロー チャージ中
-    if (p.arw) {
+    // ボムのチャージ中・ビッグアローのチャージ中は動けない
+    if (p.arw || this.bombCharging(p)) {
       p.vx *= .85; p.vy *= .85; this.map.move(p, p.vx * dt, p.vy * dt, r);
+      if (!p.arw) return; // ボムのチャージ中
       if (p.arw.t > 0) {
         p.arw.t -= dt; if (dir !== null) p.arw.a += clamp(angDiff(p.arw.a, dir), -1.3 * dt, 1.3 * dt);
         p.a = p.arw.a;

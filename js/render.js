@@ -360,7 +360,7 @@ const Render = {
   },
   // ダメージ系アイテムの予告: 範囲が赤く点滅し、内側から満ちていく(満ちたら発動)
   drawItemWarn(wn, time) {
-    const w = this.w, k = clamp(1 - wn.t, 0, 1), fl = Math.floor(time * (6 + k * 18)) % 2, R = wn.k === 'bbomb' ? 130 : wn.k === 'mbomb' ? 62 : 78;
+    const w = this.w, k = clamp(1 - wn.t, 0, 1), fl = Math.floor(time * (6 + k * 18)) % 2, R = wn.k === 'bbomb' ? 115 : wn.k === 'mbomb' ? 62 : 78;
     w.save(); w.translate(wn.x, wn.y);
     const shape = (r) => { w.beginPath(); if (wn.k === 'sword') { w.moveTo(0, 0); w.arc(0, 0, r, wn.a - 1.25, wn.a + 1.25); w.closePath(); } else w.arc(0, 0, r, 0, TAU); };
     w.globalAlpha = fl ? .32 : .18; w.fillStyle = '#ff2d2d'; shape(R); w.fill();

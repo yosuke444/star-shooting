@@ -87,7 +87,7 @@ const Net = {
   },
   common(g) {
     const P = g.players.map(p => {
-      const b = p.buf, fl = (p.dead > 0 ? 1 : 0) | (p.out ? 2 : 0) | (p.inv > 0 ? 4 : 0) | (p.flash > 0 ? 8 : 0) | (p.key ? 16 : 0) | (b.bar > 0 ? 32 : 0) | (b.jet > 0 ? 64 : 0) | (b.dumb > 0 ? 128 : 0) | (b.glass > 0 ? 256 : 0);
+      const b = p.buf, fl = (p.dead > 0 ? 1 : 0) | (p.out ? 2 : 0) | (p.inv > 0 ? 4 : 0) | (p.flash > 0 ? 8 : 0) | (p.key ? 16 : 0) | (b.bar > 0 ? 32 : 0) | (b.jet > 0 ? 64 : 0) | (b.dumb > 0 ? 128 : 0) | (b.glass > 0 ? 256 : 0) | (g.bombCharging(p) ? 512 : 0);
       return [r1(p.x), r1(p.y), r1((p.aim ?? p.a) * 100), p.m, Math.ceil(p.hp), fl, p.parts[0] | (p.parts[1] << 3) | (p.parts[2] << 6), r1(p.vx), r1(p.vy), r1(p.dead * 10), p.arw ? r1(p.arw.a * 100) : null, p.arw ? r1(p.arw.t * 10) : 0, p.stars, p.bk];
     });
     const c = g.evt && g.evt.cur;
@@ -183,7 +183,7 @@ class ClientView {
       if (i !== this.you || !p.pred) p.ta = a[2] / 100;
       p.m = a[3]; p.hp = a[4]; const fl = a[5];
       p.dead = fl & 1 ? Math.max(.01, a[9] / 10) : 0; p.out = !!(fl & 2); p.inv = fl & 4 ? 1 : 0; p.flash = fl & 8 ? .1 : 0; p.key = !!(fl & 16);
-      p.buf.bar = fl & 32 ? 1 : 0; p.buf.jet = fl & 64 ? 1 : 0; p.buf.dumb = fl & 128 ? 1 : 0; p.buf.glass = fl & 256 ? 1 : 0;
+      p.buf.bar = fl & 32 ? 1 : 0; p.buf.jet = fl & 64 ? 1 : 0; p.buf.dumb = fl & 128 ? 1 : 0; p.buf.glass = fl & 256 ? 1 : 0; p.charging = !!(fl & 512);
       p.parts = [a[6] & 7, (a[6] >> 3) & 7, (a[6] >> 6) & 7]; p.aimT = a[2] / 100; p.svx = a[7]; p.svy = a[8];
       p.arw = a[10] !== null && a[10] !== undefined ? { a: a[10] / 100, t: a[11] / 10 } : null; p.stars = a[12]; p.bk = a[13];
     });
@@ -249,7 +249,7 @@ class ClientView {
   predict(p, dt, mask) {
     p.pred = true;
     const frozen = this.phase === 'battle' && this.count > 0; const m = frozen ? 0 : mask;
-    const dir = maskDir(m), z = (m & IN.Z) !== 0;
+    const lock = p.charging, dir = lock ? null : maskDir(m), z = !lock && (m & IN.Z) !== 0; // ボムのチャージ中は動けない
     stepMachine(p, dir, z, dt, this.map, this.ss);
     // サーバー位置へ徐々に寄せる
     p.tx += (p.tvx || 0) * dt; p.ty += (p.tvy || 0) * dt;
