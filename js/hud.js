@@ -718,6 +718,7 @@ const UI = {
     ctx.globalAlpha = clamp((T - .3) / .3, 0, 1); txt(ctx, 'トレーニングの成果をチェック! 次はいよいよバトル', W / 2, 74, 14, '#e8e8ff', 'center', 3); ctx.globalAlpha = 1;
     if (me) {
       const M = MACHINES[me.m], st = stOf(me), mc = M.legend ? '#ffe14d' : M.col, rankOf = f => 1 + V.players.filter(q => f(q) > f(me)).length;
+      ctx.save(); ctx.translate(230, 0); // 画面中央にまとめる
       // 左: 自分のマシン
       panel(ctx, 24, 96, 452, 386, 'rgba(20,20,60,.55)', mc);
       const mx = 150, my = 210, ps = back(clamp((T - .2) / .4, 0, 1));
@@ -747,7 +748,6 @@ const UI = {
         txt(ctx, '総合力', 282, 366, 14, '#ffe14d', 'left', 3);
         const sc = tk2 >= 1 ? 1 + Math.max(0, .15 - (T - 2.4)) * 3 : 1;
         ctx.save(); ctx.translate(340, 366); ctx.scale(sc, sc); txt(ctx, '' + Math.round(sum(me) * tk2), 0, 0, 36, '#ffe14d', 'left', 6); ctx.restore();
-        if (tk2 >= 1) txt(ctx, '全体 ' + rankOf(sum) + '位 / ' + N + '人', 460, 400, 15, '#ffffff', 'right', 3);
       }
       // 持ち物
       ctx.globalAlpha = clamp((T - 2.2) / .3, 0, 1);
@@ -761,26 +761,8 @@ const UI = {
         for (let i = 0; i < 3; i++) if (me.parts[k] & (1 << i)) ctx.drawImage(GFX.legendPieces[li][i], px, 448 - up.height * s2 / 2, up.width * s2, up.height * s2);
         px += up.width * s2 + 8;
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = 1; ctx.restore();
     }
-    // 右: パワーランキング(総合力の高い順)
-    panel(ctx, 492, 96, 444, 386, 'rgba(20,20,60,.45)', 'rgba(138,138,208,.4)');
-    txt(ctx, 'パワーランキング', 714, 116, 18, '#ffe14d', 'center', 4); txt(ctx, '総合力の高い順', 714, 136, 11, '#aaaacc', 'center', 2);
-    const R = V.players.slice().sort((a, b) => sum(b) - sum(a) || a.id - b.id), myI = me ? R.indexOf(me) : -1;
-    const rows = myI >= 10 ? R.slice(0, 9).concat([me]) : R.slice(0, 10);
-    rows.forEach((q, j) => {
-      const k = clamp((T - 1.0 - (rows.length - 1 - j) * .14) / .25, 0, 1); if (k <= 0) return; if (k >= 1) step++; // 下の順位から積み上がる
-      const y = 162 + j * 31, sl = (1 - k) ** 2 * 300, mine = q === me, r = 1 + R.filter(o => sum(o) > sum(q)).length; // 同点は同じ順位
-      ctx.globalAlpha = k;
-      ctx.fillStyle = mine ? 'rgba(255,225,77,.28)' : 'rgba(255,255,255,.07)'; ctx.fillRect(504 + sl, y - 13, 420, 26);
-      ctx.fillStyle = PLAYER_COLS[q.col]; ctx.fillRect(504 + sl, y - 13, 4, 26);
-      if (mine && myI >= 10) { ctx.fillStyle = '#ffffff40'; ctx.fillRect(504 + sl, y - 17, 420, 1); }
-      txt(ctx, r + '位', 518 + sl, y, 16, r <= 3 ? '#ffe14d' : '#ffffff', 'left', 3);
-      const im = GFX.machine[q.m], s = Math.min(2, 24 / im.width); ctx.save(); ctx.translate(590 + sl, y); ctx.rotate(-Math.PI / 2); ctx.drawImage(im, -im.width * s / 2, -im.height * s / 2, im.width * s, im.height * s); ctx.restore();
-      txt(ctx, q.name + (mine ? ' (YOU)' : ''), 612 + sl, y, 15, PLAYER_COLS[q.col], 'left', 3);
-      txt(ctx, '' + sum(q), 914 + sl, y, 16, '#ffffff', 'right', 3);
-    });
-    ctx.globalAlpha = 1;
     // 下: 残り時間(自動で次へ)
     const rem = Math.max(0, V.t), f = clamp(rem / STATUS_TIME, 0, 1);
     txt(ctx, 'バトルステージ抽選まで あと ' + Math.ceil(rem) + '秒', W / 2, 500, 15, '#ffffff', 'center', 3);
